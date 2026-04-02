@@ -365,5 +365,20 @@ MigrationBackup/
 FodyWeavers.xsd
 
 NotUsed/
-NotUsed/**
-NotUsed/*
+/ComicViewer/jxl/lib/brotlicommon.lib
+/ComicViewer/jxl/lib/brotlidec.lib
+/ComicViewer/jxl/lib/brotlienc.lib
+/ComicViewer/jxl/lib/hwy.lib
+/ComicViewer/jxl/lib/jxl.lib
+/ComicViewer/jxl/lib/jxl_cms.lib
+/ComicViewer/jxl/lib/jxl_jni.dll
+/ComicViewer/jxl/lib/jxl_jni.lib
+/ComicViewer/jxl/lib/jxl_threads.lib
+/ComicViewer/jxl/lib/org.jpeg.jpegxl.jar
+/ComicViewer/jxl/lib/pkgconfig/libbrotlicommon.pc
+/ComicViewer/jxl/lib/pkgconfig/libbrotlidec.pc
+/ComicViewer/jxl/lib/pkgconfig/libbrotlienc.pc
+/ComicViewer/jxl/lib/pkgconfig/libhwy.pc
+/ComicViewer/jxl/lib/pkgconfig/libjxl.pc
+/ComicViewer/jxl/lib/pkgconfig/libjxl_cms.pc
+/ComicViewer/jxl/lib/pkgconfig/libjxl_threads.pc
