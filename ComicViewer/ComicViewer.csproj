@@ -1,0 +1,213 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup Label="Globals">
+		<WebView2UseWinRT>False</WebView2UseWinRT>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows7.0</TargetFramework>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+		<Platforms>AnyCPU;x64</Platforms>
+		<StartupObject>ComicViewer.App</StartupObject>
+		<ApplicationIcon>Untitled.ico</ApplicationIcon>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Content Include="Untitled.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="ExifLibNet" Version="2.1.4" />
+		<PackageReference Include="LibVLCSharp.WPF" Version="3.9.6" />
+		<PackageReference Include="MetadataExtractor" Version="2.9.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+		<PackageReference Include="NetVips" Version="3.2.0" />
+		<PackageReference Include="NetVips.Native.win-x64" Version="8.18.0" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+		<PackageReference Include="PhotoSauce.MagicScaler" Version="0.15.0" />
+		<PackageReference Include="SharpCompress" Version="0.47.0" />
+		<PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="jxl\bin\brotli.exe">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\brotlicommon.dll">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\brotlidec.dll">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\brotlienc.dll">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\jxl.dll">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\jxl_cms.dll">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\jxl_threads.dll">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.brotli">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.giflib">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.highway">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.libjpeg-turbo">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.libjxl">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.libpng">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.libwebp">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.sjpeg">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.skcms">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="jxl\bin\LICENSE.zlib">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise0_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise0_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise0_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise0_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise1_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise1_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise1_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise1_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise2_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise2_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise2_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise2_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise3_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise3_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise3_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\noise3_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-cunet\scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise0_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise0_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise1_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise1_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise2_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise2_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise3_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\noise3_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_anime_style_art_rgb\scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise0_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise0_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise1_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise1_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise2_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise2_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise3_scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\noise3_scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\scale2.0x_model.bin">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\models-upconv_7_photo\scale2.0x_model.param">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\vcomp140.dll">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x\waifu2x-ncnn-vulkan.exe">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="waifu2x_dll.dll">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+</Project>
