@@ -23,6 +23,21 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Compile Remove="AiUpscale.cs" />
+	  <Compile Remove="AiUpscale_tofile.cs" />
+	  <Compile Remove="Animation.cs" />
+	  <Compile Remove="Catmul.cs" />
+	  <Compile Remove="ImageSharp.cs" />
+	  <Compile Remove="LancozUpscaler.cs" />
+	  <Compile Remove="Michell.cs" />
+	  <Compile Remove="NetVipsUpscale.cs" />
+	  <Compile Remove="NetVips_old.cs" />
+	  <Compile Remove="Sharpen.cs" />
+	  <Compile Remove="Video.cs" />
+	  <Compile Remove="waifuNative_old.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <None Remove="waifu2x\waifu2x-ncnn-vulkan.exe" />
 	  <None Remove="waifu2x_dll.zip" />
 	  <None Remove="waifu2x_dll_old.dll" />
@@ -45,6 +60,12 @@
 		<PackageReference Include="PhotoSauce.MagicScaler" Version="0.15.0" />
 		<PackageReference Include="SharpCompress" Version="0.47.0" />
 		<PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Update="ImageProcessing\waifuNative.cs">
+	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	  </Compile>
 	</ItemGroup>
 
 	<ItemGroup>
@@ -216,7 +237,7 @@
 	  <None Update="waifu2x\vcomp140.dll">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
-	  <None Update="waifu2x_dll.dll">
+	  <None Update="waifu2x\waifu2x_dll.dll">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
 	</ItemGroup>

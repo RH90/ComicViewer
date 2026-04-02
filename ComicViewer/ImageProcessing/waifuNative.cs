@@ -10,7 +10,7 @@ namespace ComicViewer.ImageProcessing;
 
 public static class Waifu2xNative
 {
-    private const string DllName = "waifu2x_dll";
+    private const string DllName = "waifu2x/waifu2x_dll.dll";
 
     public enum GpuId
     {
