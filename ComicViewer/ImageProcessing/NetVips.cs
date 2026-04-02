@@ -1,6 +1,4 @@
 ﻿using ComicViewer.ImageProcessing;
-using ComicViewer.Imaging;
-using ComicViewer.NotUsed;
 
 
 //using ImageMagick;

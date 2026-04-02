@@ -16,6 +16,20 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="NotUsed\**" />
+	  <EmbeddedResource Remove="NotUsed\**" />
+	  <None Remove="NotUsed\**" />
+	  <Page Remove="NotUsed\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Remove="waifu2x\waifu2x-ncnn-vulkan.exe" />
+	  <None Remove="waifu2x_dll.zip" />
+	  <None Remove="waifu2x_dll_old.dll" />
+	  <None Remove="waifu_new.zip" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Content Include="Untitled.ico" />
 	</ItemGroup>
 
@@ -200,9 +214,6 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
 	  <None Update="waifu2x\vcomp140.dll">
-	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </None>
-	  <None Update="waifu2x\waifu2x-ncnn-vulkan.exe">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
 	  <None Update="waifu2x_dll.dll">
