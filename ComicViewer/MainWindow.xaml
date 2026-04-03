@@ -90,6 +90,7 @@
                 <MenuItem x:Name="MenuWebtoonRestore" Header="Restore" Click="MenuWebtoonRestore_Click"/>
             </MenuItem>
             <MenuItem Header="Scaler" x:Name="ResizeAlgoMenu">
+                <MenuItem x:Name="ScalingLanczos3Sharp" Header="Lanczos3 Sharp" Click="Scaling_Click" IsChecked="True"></MenuItem>
                 <MenuItem x:Name="ScalingLanczos3" Header="Lanczos3" Click="Scaling_Click" IsChecked="True"></MenuItem>
                 <MenuItem x:Name="ScalingThumb" Header="Thumb" Click="Scaling_Click" ></MenuItem>
                 <MenuItem x:Name="ScalingThumbL" Header="Thumb (linear)" Click="Scaling_Click" ></MenuItem>

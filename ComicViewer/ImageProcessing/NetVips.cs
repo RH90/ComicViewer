@@ -189,13 +189,24 @@ public static class VipsImageFactory
                         vScale = newRatio;
                         hScale = newRatio;
 
+
+
                         resized = waifuIMG.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
 
 
                     }
                     else
                     {
-                        resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
+                        //Sharpen: sigma=radius, m2=amount, x1=threshold
+                        if (sharpen)
+                        {
+                            resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: 1.5, m2: 0.5, x1: 0);
+                        }
+                        else
+                        {
+                            resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
+                        }
+
                     }
 
                     //if (vipsImage.HasAlpha())

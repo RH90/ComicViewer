@@ -1480,7 +1480,13 @@ namespace ComicViewer
                 }
                 else
                 {
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), scalingAlgo, newWidth, newHeight, false);
+                    bool sharpen = false;
+                    if (scalingAlgo == (Enums.Kernel)25)
+                    {
+                        sharpen = true;
+                    }
+
+                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), scalingAlgo, newWidth, newHeight, sharpen);
                     if (index == _currentPage)
                         _MagicScale = false;
                 }
@@ -2369,6 +2375,10 @@ namespace ComicViewer
             else if (sender == ScalingAIHigh)
             {
                 _scalingAlgo = (Enums.Kernel)23;
+            }
+            else if (sender == ScalingLanczos3Sharp)
+            {
+                _scalingAlgo = (Enums.Kernel)25;
             }
 
             Debug.WriteLine(_scalingAlgo);
