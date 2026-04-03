@@ -97,12 +97,14 @@ public static class VipsImageFactory
     /// </summary>
     public static BitmapSource Scale(Image vipsImage, Enums.Kernel scalingAlgo, int targetWidth = 0, int targetHeight = 0, bool sharpen = false)
     {
+        Image? temp = null;
         Image resized = null!;
         bool didResize = targetWidth > 0 || targetHeight > 0;
 
         try
         {
-            using Image temp = ToBgra(vipsImage);
+            //using Image temp = ToBgra(vipsImage);
+            temp = ApplyIccProfile(vipsImage);
             if (didResize)
             {
                 int outW = targetWidth > 0 ? targetWidth : temp.Width;
@@ -274,28 +276,28 @@ public static class VipsImageFactory
 
             }
 
-            Image workImage = didResize ? resized : vipsImage;
+            using Image workImage = didResize ? resized : vipsImage;
 
-            //using Image bgra = ToBgra(workImage);
+            using Image bgra = ToBgraNoIcc(workImage);
 
-            byte[] pixels = workImage.WriteToMemory<byte>();
-            int stride = workImage.Width * workImage.Bands;
+            byte[] pixels = bgra.WriteToMemory<byte>();
+            int stride = bgra.Width * bgra.Bands;
 
-            PixelFormat pixelFormat = workImage.Bands switch
+            PixelFormat pixelFormat = bgra.Bands switch
             {
                 1 => PixelFormats.Gray8,
                 3 => PixelFormats.Bgr24,
                 4 => PixelFormats.Bgra32,
-                _ => throw new NotSupportedException($"Unexpected band count: {workImage.Bands}")
+                _ => throw new NotSupportedException($"Unexpected band count: {bgra.Bands}")
             };
 
             var result = BitmapSource.Create(
-                workImage.Width, workImage.Height,
+                bgra.Width, bgra.Height,
                 96, 96,
                 pixelFormat, null,
                 pixels, stride);
 
-            workImage.Dispose();
+            //workImage.Dispose();
             result.Freeze();
             return result;
         }
@@ -305,6 +307,8 @@ public static class VipsImageFactory
 
             vipsImage?.Dispose();
             resized?.Dispose();
+            if (temp != null && temp != vipsImage)
+                temp.Dispose();
         }
     }
 
@@ -318,23 +322,51 @@ public static class VipsImageFactory
     /// Without this, wide-gamut (P3, AdobeRGB) images appear washed out
     /// and images with unusual profiles show wrong colours entirely.
     /// </summary>
-    public static Image ToBgra(Image img)
-    {
-        // ── 1. Apply embedded ICC profile → convert to sRGB ──────────────────
-        // If the image has an embedded profile (e.g. AdobeRGB, P3, CMYK),
-        // IccTransform converts it to sRGB so WPF displays it correctly.
-        // If there is no profile, libvips assumes sRGB and this is a no-op.
-        Image src = ApplyIccProfile(img);
-        bool ownsSrc = src != img;
+    //public static Image ToBgra(Image img)
+    //{
+    //    // ── 1. Apply embedded ICC profile → convert to sRGB ──────────────────
+    //    // If the image has an embedded profile (e.g. AdobeRGB, P3, CMYK),
+    //    // IccTransform converts it to sRGB so WPF displays it correctly.
+    //    // If there is no profile, libvips assumes sRGB and this is a no-op.
 
-        // ── 2. Collapse exotic band counts ───────────────────────────────────
-        if (src.Bands > 4)
-        {
-            Image flat = src.Flatten();
-            if (ownsSrc) src.Dispose();
-            src = flat;
-            ownsSrc = true;
-        }
+    //    //Image src = ApplyIccProfile(img);
+    //    //bool ownsSrc = src != img;
+
+    //    Image src = (img);
+    //    bool ownsSrc = src != img;
+    //    // ── 2. Collapse exotic band counts ───────────────────────────────────
+    //    if (src.Bands > 4)
+    //    {
+    //        Image flat = src.Flatten();
+    //        if (ownsSrc) src.Dispose();
+    //        src = flat;
+    //        ownsSrc = true;
+    //    }
+
+    //    try
+    //    {
+    //        return src.Bands switch
+    //        {
+    //            1 => src.Copy(),
+    //            2 => src.Flatten(background: new double[] { 255 }),
+    //            3 => ReorderBands(src, 2, 1, 0),
+    //            4 => ReorderBands(src, 2, 1, 0, 3),
+    //            _ => throw new NotSupportedException($"Unexpected band count: {src.Bands}")
+    //        };
+    //    }
+    //    finally
+    //    {
+    //        if (ownsSrc) src.Dispose();
+    //    }
+    //}
+    /// <summary>
+    /// Converts to WPF-compatible band order WITHOUT applying ICC profile.
+    /// Call this only after ApplyIccProfile has already been called.
+    /// </summary>
+    private static Image ToBgraNoIcc(Image img)
+    {
+        bool didFlatten = img.Bands > 4;
+        Image src = didFlatten ? img.Flatten() : img;
 
         try
         {
@@ -349,9 +381,10 @@ public static class VipsImageFactory
         }
         finally
         {
-            if (ownsSrc) src.Dispose();
+            if (didFlatten) src.Dispose();
         }
     }
+
 
     /// <summary>
     /// Applies the embedded ICC profile to convert the image to sRGB.
