@@ -90,7 +90,7 @@ namespace ComicViewer
         private bool _MagicScale = false;
         private bool _noScale = false;
         private List<(int, System.Windows.Controls.Image)> webToonList = new List<(int, System.Windows.Controls.Image)>();
-        private Log Log = new Log();
+        public static Log Log = new Log();
         private bool _skipInQueue = false;
 
 
@@ -355,7 +355,6 @@ namespace ComicViewer
                 .Where(entry =>
                 {
                     string str = entry.Key.ToLower();
-                    Debug.WriteLine(str);
                     if (
                     (str.Contains(".jpg") ||
                     str.Contains(".jpeg") ||

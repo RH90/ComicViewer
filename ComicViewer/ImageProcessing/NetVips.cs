@@ -198,9 +198,22 @@ public static class VipsImageFactory
                     else
                     {
                         //Sharpen: sigma=radius, m2=amount, x1=threshold
+                        //Debug.WriteLine(temp.HasAlpha());
                         if (sharpen)
                         {
-                            resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: 1.5, m2: 0.5, x1: 0);
+                            //Debug.WriteLine("Bands: " + temp.Interpretation);
+                            MainWindow.Log.add("Bands: " + temp.Interpretation, false);
+                            if (temp.Interpretation == Interpretation.Multiband)
+                            {
+                                using Image labs = temp.Colourspace(Interpretation.Labs);
+                                using Image sharpenImg = labs.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: 1.5, m2: 0.5, x1: 0);
+                                resized = sharpenImg.Colourspace(Interpretation.Srgb);
+                            }
+                            else
+                            {
+                                resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: 1.5, m2: 0.5, x1: 0);
+                            }
+
                         }
                         else
                         {
@@ -386,7 +399,11 @@ public static class VipsImageFactory
             // Check if the image has an embedded ICC profile.
             // get_typeof returns 0 if the field does not exist.
             if (img.GetTypeOf("icc-profile-data") == 0)
+            {
+                Debug.WriteLine("No embedded ICC profile found; skipping colour transform.");
                 return img;
+            }
+
 
             // IccTransform converts from the embedded profile to the target.
             // "srgb" = standard sRGB, which is what BitmapSource/WPF expects.
