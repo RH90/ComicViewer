@@ -102,13 +102,14 @@ public static class VipsImageFactory
 
         try
         {
+            using Image temp = ToBgra(vipsImage);
             if (didResize)
             {
-                int outW = targetWidth > 0 ? targetWidth : vipsImage.Width;
-                int outH = targetHeight > 0 ? targetHeight : vipsImage.Height;
+                int outW = targetWidth > 0 ? targetWidth : temp.Width;
+                int outH = targetHeight > 0 ? targetHeight : temp.Height;
 
-                double hScale = (double)outW / vipsImage.Width;
-                double vScale = (double)outH / vipsImage.Height;
+                double hScale = (double)outW / temp.Width;
+                double vScale = (double)outH / temp.Height;
                 double minScale = Math.Min(hScale, vScale);
 
                 //Enums.Kernel kernel = Enums.Kernel.Lanczos3;
@@ -153,19 +154,18 @@ public static class VipsImageFactory
                 //else
                 //{
 
-
                 if (scalingAlgo == (Enums.Kernel)12)
                 {
-                    resized = vipsImage.ThumbnailImage(targetWidth, targetHeight);
+                    resized = temp.ThumbnailImage(targetWidth, targetHeight);
                 }
                 else if (scalingAlgo == (Enums.Kernel)13)
                 {
-                    resized = vipsImage.ThumbnailImage(targetWidth, targetHeight, linear: true);
+                    resized = temp.ThumbnailImage(targetWidth, targetHeight, linear: true);
                 }
                 else
                 {
 
-                    if (vipsImage.Width < System.Windows.SystemParameters.PrimaryScreenWidth &&
+                    if (temp.Width < System.Windows.SystemParameters.PrimaryScreenWidth &&
                         (scalingAlgo == (Enums.Kernel)20 ||
                         scalingAlgo == (Enums.Kernel)21 ||
                         scalingAlgo == (Enums.Kernel)22 ||
@@ -177,7 +177,7 @@ public static class VipsImageFactory
                         {
                             AiScale = 4;
                         }
-                        int newWidth = (int)Math.Round(vipsImage.Width * vScale);
+                        int newWidth = (int)Math.Round(temp.Width * vScale);
                         Debug.WriteLine("AiScale:" + AiScale);
 
 
@@ -194,10 +194,10 @@ public static class VipsImageFactory
                         {
                             noiseLevel = Waifu2xNative.Waifu2xNoiseLevel.Highest;
                         }
-                        vipsImage = Waifu2xNative.UpscalePng(vipsImage,
-                            Waifu2xNative.Waifu2xModel.AnimeStyleArt,
-                            noiseLevel,
-                            AiScale);
+                        using Image waifuIMG = Waifu2xNative.UpscalePng(temp,
+                             Waifu2xNative.Waifu2xModel.AnimeStyleArt,
+                             noiseLevel,
+                             AiScale);
 
 
                         //Waifu2xNativeOld.Waifu2xNoiseLevel noiseLevel = Waifu2xNativeOld.Waifu2xNoiseLevel.None;
@@ -219,7 +219,7 @@ public static class VipsImageFactory
                         //    noiseLevel,
                         //    AiScale);
 
-                        int width2 = vipsImage.Width;
+                        int width2 = waifuIMG.Width;
 
                         double newRatio = (double)newWidth / (double)width2;
                         Debug.WriteLine("newRatio: " + newRatio);
@@ -228,6 +228,13 @@ public static class VipsImageFactory
                         vScale = newRatio;
                         hScale = newRatio;
 
+                        resized = waifuIMG.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
+
+
+                    }
+                    else
+                    {
+                        resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
                     }
 
                     //if (vipsImage.HasAlpha())
@@ -239,7 +246,7 @@ public static class VipsImageFactory
                     //}
                     //else
                     //{
-                    resized = vipsImage.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
+
                     //}
                 }
 
@@ -269,21 +276,21 @@ public static class VipsImageFactory
 
             Image workImage = didResize ? resized : vipsImage;
 
-            using Image bgra = ToBgra(workImage);
+            //using Image bgra = ToBgra(workImage);
 
-            byte[] pixels = bgra.WriteToMemory<byte>();
-            int stride = bgra.Width * bgra.Bands;
+            byte[] pixels = workImage.WriteToMemory<byte>();
+            int stride = workImage.Width * workImage.Bands;
 
-            PixelFormat pixelFormat = bgra.Bands switch
+            PixelFormat pixelFormat = workImage.Bands switch
             {
                 1 => PixelFormats.Gray8,
                 3 => PixelFormats.Bgr24,
                 4 => PixelFormats.Bgra32,
-                _ => throw new NotSupportedException($"Unexpected band count: {bgra.Bands}")
+                _ => throw new NotSupportedException($"Unexpected band count: {workImage.Bands}")
             };
 
             var result = BitmapSource.Create(
-                bgra.Width, bgra.Height,
+                workImage.Width, workImage.Height,
                 96, 96,
                 pixelFormat, null,
                 pixels, stride);
@@ -306,17 +313,28 @@ public static class VipsImageFactory
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Converts any NetVips image to a WPF-compatible band order.
-    /// All intermediate band extractions are disposed immediately.
-    ///   1 band  → Gray8  (no reorder)
-    ///   3 bands → Bgr24  (R↔B swap)
-    ///   4 bands → Bgra32 (R↔B swap, alpha preserved)
-    ///   5+ bands → flattened to RGBA first
+    /// Converts any NetVips image to a WPF-compatible band order,
+    /// applying any embedded ICC profile to convert to sRGB first.
+    /// Without this, wide-gamut (P3, AdobeRGB) images appear washed out
+    /// and images with unusual profiles show wrong colours entirely.
     /// </summary>
     public static Image ToBgra(Image img)
     {
-        bool didFlatten = img.Bands > 4;
-        Image src = didFlatten ? img.Flatten() : img;
+        // ── 1. Apply embedded ICC profile → convert to sRGB ──────────────────
+        // If the image has an embedded profile (e.g. AdobeRGB, P3, CMYK),
+        // IccTransform converts it to sRGB so WPF displays it correctly.
+        // If there is no profile, libvips assumes sRGB and this is a no-op.
+        Image src = ApplyIccProfile(img);
+        bool ownsSrc = src != img;
+
+        // ── 2. Collapse exotic band counts ───────────────────────────────────
+        if (src.Bands > 4)
+        {
+            Image flat = src.Flatten();
+            if (ownsSrc) src.Dispose();
+            src = flat;
+            ownsSrc = true;
+        }
 
         try
         {
@@ -331,7 +349,38 @@ public static class VipsImageFactory
         }
         finally
         {
-            if (didFlatten) src.Dispose();
+            if (ownsSrc) src.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Applies the embedded ICC profile to convert the image to sRGB.
+    /// Returns the original image unchanged if no profile is present.
+    /// </summary>
+    private static Image ApplyIccProfile(Image img)
+    {
+        try
+        {
+            // Check if the image has an embedded ICC profile.
+            // get_typeof returns 0 if the field does not exist.
+            if (img.GetTypeOf("icc-profile-data") == 0)
+                return img;
+
+            // IccTransform converts from the embedded profile to the target.
+            // "srgb" = standard sRGB, which is what BitmapSource/WPF expects.
+            // PCS = perceptual rendering intent — best for display/photos.
+            // embedded = true means use the profile attached to the image.
+            return img.IccTransform(
+                "srgb",
+                pcs: Enums.PCS.Xyz,
+                intent: Enums.Intent.Perceptual,
+                embedded: true);
+        }
+        catch
+        {
+            // If the profile is malformed or the transform fails,
+            // fall back to treating the image as sRGB unchanged.
+            return img;
         }
     }
 

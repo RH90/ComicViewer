@@ -431,6 +431,8 @@ public static class MagicScalerImageFactory
 
         // SaveFormat is not a property of ProcessImageSettings — it was removed.
         // Since we use BuildPipeline + CopyPixels, no encoder is involved at all.
+
+
         var settings = new ProcessImageSettings
         {
             //Anchor = CropAnchor.Bottom,

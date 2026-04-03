@@ -11,7 +11,7 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<Platforms>AnyCPU;x64</Platforms>
 		<StartupObject>ComicViewer.App</StartupObject>
-		<ApplicationIcon>Untitled.ico</ApplicationIcon>
+		<ApplicationIcon>icon.ico</ApplicationIcon>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
@@ -45,7 +45,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Include="Untitled.ico" />
+		<Content Include="icon.ico" />
 	</ItemGroup>
 
 	<ItemGroup>
