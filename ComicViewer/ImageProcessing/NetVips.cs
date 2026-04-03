@@ -114,47 +114,6 @@ public static class VipsImageFactory
                 double vScale = (double)outH / temp.Height;
                 double minScale = Math.Min(hScale, vScale);
 
-                //Enums.Kernel kernel = Enums.Kernel.Lanczos3;
-
-                //if (scalingAlgo == 0)
-                //    kernel = Enums.Kernel.Lanczos3;
-                //else
-                //    kernel = Enums.Kernel.Mitchell;
-
-                //kernel = Enums.Kernel.Mks2021;
-                // Pick kernel based on how much we're shrinking.
-                //Enums.Kernel kernel = minScale switch
-                //{
-                //    >= 1.0 => Enums.Kernel.Lanczos3, // upscale
-                //    >= 0.5 => Enums.Kernel.Mitchell,  // moderate downscale
-                //    _ => Enums.Kernel.Linear     // heavy downscale (>50% reduction)
-                //};
-
-                //if (vipsImage.HasAlpha())
-                //{
-                //resized = vipsImage.Premultiply().Resize(hScale, vscale: vScale, kernel: scalingAlgo).Unpremultiply();
-                //}
-                //else
-                //{
-                //resized = vipsImage.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
-                //if (sharpen)
-                //{
-                //resized = vipsImage.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: 0.5, x1: 8, y2: 10, y3: 20, m1: 0, m2: 3);
-
-                //if (scalingAlgo == Enums.Kernel.Lanczos3)
-                //{
-                //    resized = vipsImage.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
-
-                //}
-                //else
-                //{
-                //    resized = vipsImage.ThumbnailImage(outW, outH, linear: false);
-                //}
-
-
-                //}
-                //else
-                //{
 
                 if (scalingAlgo == (Enums.Kernel)12)
                 {
@@ -276,6 +235,26 @@ public static class VipsImageFactory
 
             }
 
+            //using Image workImage = didResize ? resized : vipsImage;
+
+            //byte[] pixels = workImage.WriteToMemory<byte>();
+            //int stride = workImage.Width * workImage.Bands;
+
+            //PixelFormat pixelFormat = workImage.Bands switch
+            //{
+            //    1 => PixelFormats.Gray8,
+            //    3 => PixelFormats.Bgr24,
+            //    4 => PixelFormats.Bgra32,
+            //    _ => throw new NotSupportedException($"Unexpected band count: {bgra.Bands}")
+            //};
+
+            //var result = BitmapSource.Create(
+            //    workImage.Width, workImage.Height,
+            //    96, 96,
+            //    pixelFormat, null,
+            //    pixels, stride);
+            //result.Freeze();
+
             using Image workImage = didResize ? resized : vipsImage;
 
             using Image bgra = ToBgraNoIcc(workImage);
@@ -296,9 +275,8 @@ public static class VipsImageFactory
                 96, 96,
                 pixelFormat, null,
                 pixels, stride);
-
-            //workImage.Dispose();
             result.Freeze();
+
             return result;
         }
         finally
@@ -322,43 +300,43 @@ public static class VipsImageFactory
     /// Without this, wide-gamut (P3, AdobeRGB) images appear washed out
     /// and images with unusual profiles show wrong colours entirely.
     /// </summary>
-    //public static Image ToBgra(Image img)
-    //{
-    //    // ── 1. Apply embedded ICC profile → convert to sRGB ──────────────────
-    //    // If the image has an embedded profile (e.g. AdobeRGB, P3, CMYK),
-    //    // IccTransform converts it to sRGB so WPF displays it correctly.
-    //    // If there is no profile, libvips assumes sRGB and this is a no-op.
+    public static Image ToBgra(Image img)
+    {
+        // ── 1. Apply embedded ICC profile → convert to sRGB ──────────────────
+        // If the image has an embedded profile (e.g. AdobeRGB, P3, CMYK),
+        // IccTransform converts it to sRGB so WPF displays it correctly.
+        // If there is no profile, libvips assumes sRGB and this is a no-op.
 
-    //    //Image src = ApplyIccProfile(img);
-    //    //bool ownsSrc = src != img;
+        Image src = ApplyIccProfile(img);
+        bool ownsSrc = src != img;
 
-    //    Image src = (img);
-    //    bool ownsSrc = src != img;
-    //    // ── 2. Collapse exotic band counts ───────────────────────────────────
-    //    if (src.Bands > 4)
-    //    {
-    //        Image flat = src.Flatten();
-    //        if (ownsSrc) src.Dispose();
-    //        src = flat;
-    //        ownsSrc = true;
-    //    }
+        //Image src = (img);
+        //bool ownsSrc = src != img;
+        // ── 2. Collapse exotic band counts ───────────────────────────────────
+        if (src.Bands > 4)
+        {
+            Image flat = src.Flatten();
+            if (ownsSrc) src.Dispose();
+            src = flat;
+            ownsSrc = true;
+        }
 
-    //    try
-    //    {
-    //        return src.Bands switch
-    //        {
-    //            1 => src.Copy(),
-    //            2 => src.Flatten(background: new double[] { 255 }),
-    //            3 => ReorderBands(src, 2, 1, 0),
-    //            4 => ReorderBands(src, 2, 1, 0, 3),
-    //            _ => throw new NotSupportedException($"Unexpected band count: {src.Bands}")
-    //        };
-    //    }
-    //    finally
-    //    {
-    //        if (ownsSrc) src.Dispose();
-    //    }
-    //}
+        try
+        {
+            return src.Bands switch
+            {
+                1 => src.Copy(),
+                2 => src.Flatten(background: new double[] { 255 }),
+                3 => ReorderBands(src, 2, 1, 0),
+                4 => ReorderBands(src, 2, 1, 0, 3),
+                _ => throw new NotSupportedException($"Unexpected band count: {src.Bands}")
+            };
+        }
+        finally
+        {
+            if (ownsSrc) src.Dispose();
+        }
+    }
     /// <summary>
     /// Converts to WPF-compatible band order WITHOUT applying ICC profile.
     /// Call this only after ApplyIccProfile has already been called.

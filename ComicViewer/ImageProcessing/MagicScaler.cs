@@ -254,6 +254,7 @@
 using PhotoSauce.MagicScaler;
 using PhotoSauce.MagicScaler.Transforms;
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Windows.Media;
@@ -431,7 +432,7 @@ public static class MagicScalerImageFactory
 
         // SaveFormat is not a property of ProcessImageSettings — it was removed.
         // Since we use BuildPipeline + CopyPixels, no encoder is involved at all.
-
+        // MagicScaler settings: Unsharp: Threshold=0,Amount=40,Radius=1,5
 
         var settings = new ProcessImageSettings
         {
@@ -444,6 +445,7 @@ public static class MagicScalerImageFactory
             HybridMode = HybridScaleMode.FavorQuality,
             Interpolation = interpolation,
         };
+        //Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={settings.UnsharpMask.Threshold},Amount={settings.UnsharpMask.Amount},Radius={settings.UnsharpMask.Radius}");
 
         if (targetWidth > 0) settings.Width = targetWidth;
         if (targetHeight > 0) settings.Height = targetHeight;
