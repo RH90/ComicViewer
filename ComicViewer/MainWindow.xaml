@@ -83,6 +83,7 @@
                 <MenuItem x:Name="MenuFitWindow" Header="Fit to Window" Click="SetFitWindow"/>
                 <MenuItem x:Name="MenuFitWidth" Header="Fit to Width" Click="SetFitWidth"/>
                 <MenuItem x:Name="MenuNoScale" Header="No Scaling" Click="SetNoScale"/>
+                <MenuItem x:Name="MenuFitFixed" Header="Fixed Scale" Click="SetFixedScale"/>
             </MenuItem>
             <MenuItem Header="Webtoon" >
                 <MenuItem x:Name="MenuWebtoon" Header="Webtoon" Click="MenuWebtoon_Click"/>
@@ -113,6 +114,7 @@
             <MenuItem Header="Open Comic (.zip/.cbz)" Click="Open_Click" Foreground="Black"/>
             <MenuItem Header="Open in Explorer" Click="ExploreZip"/>
             <MenuItem Header="Open Log" Click="OpenLog_Click"/>
+            <MenuItem Header="Open Config" Click="OpenConfig_Click"/>
             <MenuItem Header="Close" Click="Menu_Closing"/>
         </ContextMenu>
     </Window.ContextMenu>

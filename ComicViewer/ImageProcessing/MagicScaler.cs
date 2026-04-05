@@ -444,6 +444,7 @@ public static class MagicScalerImageFactory
             //ResizeMode = CropScaleMode.Stretch,
             HybridMode = HybridScaleMode.FavorQuality,
             Interpolation = interpolation,
+            //ColorProfileMode = ColorProfileMode.Normalize,
         };
         //Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={settings.UnsharpMask.Threshold},Amount={settings.UnsharpMask.Amount},Radius={settings.UnsharpMask.Radius}");
 

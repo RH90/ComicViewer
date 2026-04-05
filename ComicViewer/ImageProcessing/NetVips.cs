@@ -202,16 +202,23 @@ public static class VipsImageFactory
                         if (sharpen)
                         {
                             //Debug.WriteLine("Bands: " + temp.Interpretation);
+                            double sigma = 1.5; // default 0.5, radius
+                            double m2 = 0.5; // default 3 , amount
+                            double y2 = 4; // default 10 , maximum amount of brightening
+                            double x1 = 0; // default 2 threshold
+
+                            double m1 = 0; // default 0 
+                            double y3 = 20; // default 20
                             MainWindow.Log.add("Bands: " + temp.Interpretation, false);
                             if (temp.Interpretation == Interpretation.Multiband)
                             {
                                 using Image labs = temp.Colourspace(Interpretation.Labs);
-                                using Image sharpenImg = labs.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: 1.5, m2: 0.5, x1: 0);
+                                using Image sharpenImg = labs.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
                                 resized = sharpenImg.Colourspace(Interpretation.Srgb);
                             }
                             else
                             {
-                                resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: 1.5, m2: 0.5, x1: 0);
+                                resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
                             }
 
                         }
