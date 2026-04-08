@@ -100,6 +100,7 @@
                 <MenuItem x:Name="ScalingMitchell" Header="Mitchell" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingLinear" Header="Linear" Click="Scaling_Click" ></MenuItem>
                 <Separator x:Name="Seperator" BorderThickness="2" BorderBrush="Black"></Separator>
+                <MenuItem x:Name="ScalingUltraSharpLinear" Header="UltraSharp (Linear)" Click="Scaling_Click" ></MenuItem>
                 <MenuItem x:Name="ScalingUltraSharp" Header="UltraSharp" Click="Scaling_Click" ></MenuItem>
                 <MenuItem x:Name="ScalingCatRom" Header="Catrom" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingHermite" Header="Hermite" Click="Scaling_Click"></MenuItem>

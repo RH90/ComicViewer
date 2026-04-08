@@ -95,7 +95,7 @@ public static class VipsImageFactory
     ///   - Moderate downscale       → Mitchell  (balanced sharpness/ringing)
     ///   - Heavy downscale (≤50%)   → Linear    (fastest, avoids aliasing)
     /// </summary>
-    public static BitmapSource Scale(Image vipsImage, Enums.Kernel scalingAlgo, int targetWidth = 0, int targetHeight = 0, bool sharpen = false)
+    public static BitmapSource Scale(Image vipsImage, Enums.Kernel scalingAlgo, int targetWidth = 0, int targetHeight = 0, int sharpenLevel = 0)
     {
         Image? temp = null;
         Image resized = null!;
@@ -105,16 +105,18 @@ public static class VipsImageFactory
         {
             //using Image temp = ToBgra(vipsImage);
             temp = ApplyIccProfile(vipsImage);
+            int outW = targetWidth > 0 ? targetWidth : temp.Width;
+            int outH = targetHeight > 0 ? targetHeight : temp.Height;
+
+            double hScale = (double)outW / temp.Width;
+            double vScale = (double)outH / temp.Height;
+            double minScale = Math.Min(hScale, vScale);
+
+            didResize = (vScale != 0);
+
+
             if (didResize)
             {
-                int outW = targetWidth > 0 ? targetWidth : temp.Width;
-                int outH = targetHeight > 0 ? targetHeight : temp.Height;
-
-                double hScale = (double)outW / temp.Width;
-                double vScale = (double)outH / temp.Height;
-                double minScale = Math.Min(hScale, vScale);
-
-
                 if (scalingAlgo == (Enums.Kernel)12)
                 {
                     resized = temp.ThumbnailImage(targetWidth, targetHeight);
@@ -183,7 +185,7 @@ public static class VipsImageFactory
                         int width2 = waifuIMG.Width;
 
                         double newRatio = (double)newWidth / (double)width2;
-                        Debug.WriteLine("newRatio: " + newRatio);
+                        //Debug.WriteLine("newRatio: " + newRatio);
                         scalingAlgo = Enums.Kernel.Lanczos3;
 
                         vScale = newRatio;
@@ -199,20 +201,32 @@ public static class VipsImageFactory
                     {
                         //Sharpen: sigma=radius, m2=amount, x1=threshold
                         //Debug.WriteLine(temp.HasAlpha());
-                        if (sharpen)
+                        if (sharpenLevel > 0 && didResize && vScale != 1)
                         {
-                            //Debug.WriteLine("Bands: " + temp.Interpretation);
+                            //Debug.WriteLine("Bands: " + temp.Interpretation
                             double sigma = 1.5; // default 0.5, radius
-                            double m2 = 0.5; // default 3 , amount
-                            double y2 = 4; // default 10 , maximum amount of brightening
-                            double x1 = 0; // default 2 threshold
+                            double m2 = 0.4; // default 3 , amount (3)
+                            double y2 = 3; // default 10 , maximum amount of brightening (2.5)
+                            double x1 = 2; // default 2 threshold , higher = sharpen only stronger edges
 
                             double m1 = 0; // default 0 
                             double y3 = 20; // default 20
-                            MainWindow.Log.add("Bands: " + temp.Interpretation, false);
+
+
+                            //double sigma = 1.5; // default 0.5, radius
+                            //double m2 = 0.5; // default 3 , amount
+                            //double y2 = 4; // default 10 , maximum amount of brightening
+                            //double x1 = 0; // default 2 threshold
+
+                            //double m1 = 0; // default 0 
+                            //double y3 = 20; // default 20
+                            //MainWindow.Log.add("Bands: " + temp.Interpretation, false);
+                            scalingAlgo = Enums.Kernel.Lanczos2;
+
                             if (temp.Interpretation == Interpretation.Multiband)
                             {
                                 using Image labs = temp.Colourspace(Interpretation.Labs);
+                                //using Image sharpenImg = labs.ThumbnailImage(targetWidth, targetHeight, linear: true).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
                                 using Image sharpenImg = labs.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
                                 resized = sharpenImg.Colourspace(Interpretation.Srgb);
                             }

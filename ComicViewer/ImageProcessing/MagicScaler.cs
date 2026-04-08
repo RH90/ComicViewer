@@ -288,17 +288,18 @@ public static class MagicScalerImageFactory
         MagicImageFormat format,
         int targetWidth = 0,
         int targetHeight = 0,
-        bool keepAspectRatio = true)
+        bool keepAspectRatio = true,
+        bool linear = false)
     {
         ArgumentNullException.ThrowIfNull(data);
 
         return format switch
         {
-            MagicImageFormat.Jpeg => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation),
-            MagicImageFormat.Png => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation),
-            MagicImageFormat.WebP => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation),
-            MagicImageFormat.Jxl => ScaleJxl(data, targetWidth, targetHeight, keepAspectRatio, interpolation),
-            MagicImageFormat.Jxr => ScaleJxr(data, targetWidth, targetHeight, keepAspectRatio, interpolation),
+            MagicImageFormat.Jpeg => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
+            MagicImageFormat.Png => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
+            MagicImageFormat.WebP => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
+            MagicImageFormat.Jxl => ScaleJxl(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
+            MagicImageFormat.Jxr => ScaleJxr(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
             _ => throw new NotSupportedException($"Format '{format}' is not supported.")
         };
     }
@@ -308,13 +309,13 @@ public static class MagicScalerImageFactory
     // -------------------------------------------------------------------------
 
     private static (BitmapSource, int, int) ScaleEncoded(
-     byte[] data, int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation)
+     byte[] data, int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear)
     {
         // ImageFileInfo.Load reads only the compressed header — no pixel decode.
         // Frames[0] contains the corrected (post-EXIF-rotation) Width and Height.
         var frameInfo = ImageFileInfo.Load(data.AsSpan()).Frames[0];
 
-        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation);
+        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear);
 
         using var pipeline = MagicImageProcessor.BuildPipeline(
                                  new MemoryStream(data, writable: false), settings);
@@ -327,7 +328,7 @@ public static class MagicScalerImageFactory
     // -------------------------------------------------------------------------
 
     private static (BitmapSource, int, int) ScaleJxl(
-        byte[] data, int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation)
+        byte[] data, int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear)
     {
         var (pixels, w, h, _) = JxlDecoder.DecodeInternalRaw(
             data, new JxlDecodeOptions { Threads = Environment.ProcessorCount });
@@ -351,7 +352,7 @@ public static class MagicScalerImageFactory
         if (bands >= 3) SwapRedBlue(pixels, bands);
 
         using var src = new RawPixelSource(pixels, originalWidth, originalHeight, bands, BandsToWicGuid(bands));
-        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation);
+        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear);
 
         using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);
         return (PipelineToBitmapSource(pipeline.PixelSource), originalWidth, originalHeight);
@@ -362,7 +363,7 @@ public static class MagicScalerImageFactory
     // -------------------------------------------------------------------------
 
     private static (BitmapSource, int, int) ScaleJxr(
-        byte[] data, int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation)
+        byte[] data, int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear)
     {
         int originalWidth, originalHeight;
         byte[] bgra;
@@ -384,7 +385,7 @@ public static class MagicScalerImageFactory
 
         // WIC outputs BGRA — already in the correct order for MagicScaler.
         using var src = new RawPixelSource(bgra, originalWidth, originalHeight, 4, WicGuid_Bgra32);
-        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation);
+        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear);
 
         using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);
         return (PipelineToBitmapSource(pipeline.PixelSource), originalWidth, originalHeight);
@@ -425,10 +426,10 @@ public static class MagicScalerImageFactory
     // -------------------------------------------------------------------------
 
     private static ProcessImageSettings BuildSettings(
-      int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation)
+      int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear)
     {
 
-        UnsharpMaskSettings us = new UnsharpMaskSettings(20, 2, 5);
+        UnsharpMaskSettings us = new UnsharpMaskSettings(40, 1.5, 0x55);
 
         // SaveFormat is not a property of ProcessImageSettings — it was removed.
         // Since we use BuildPipeline + CopyPixels, no encoder is involved at all.
@@ -446,15 +447,34 @@ public static class MagicScalerImageFactory
             Interpolation = interpolation,
             //ColorProfileMode = ColorProfileMode.Normalize,
         };
+
+        if (interpolation == InterpolationSettings.CatmullRom)
+        {
+            settings.Interpolation = InterpolationSettings.Lanczos;
+            settings.UnsharpMask = new UnsharpMaskSettings(30, 1.5, 0x45);
+        }
+        else if (interpolation == InterpolationSettings.Lanczos)
+        {
+            settings.UnsharpMask = new UnsharpMaskSettings(40, 1.5, 0x30);
+        }
+
+
+        if (linear)
+        {
+            settings.BlendingMode = GammaMode.Linear;
+            settings.ColorProfileMode = ColorProfileMode.Normalize;
+        }
         //Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={settings.UnsharpMask.Threshold},Amount={settings.UnsharpMask.Amount},Radius={settings.UnsharpMask.Radius}");
 
         if (targetWidth > 0) settings.Width = targetWidth;
         if (targetHeight > 0) settings.Height = targetHeight;
 
+
         if (targetWidth > 0 && targetHeight > 0)
         {
             settings.ResizeMode = keepAspectRatio
-                ? CropScaleMode.Pad
+                //? CropScaleMode.Pad
+                ? CropScaleMode.Crop
                 : CropScaleMode.Stretch;
         }
 
