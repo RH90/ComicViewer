@@ -71,7 +71,8 @@
                                   StrokeEndLineCap="Round"
                                   VerticalAlignment="Center"
                                   Margin="12,0,0,0"
-                                  Visibility="Collapsed"/>
+                                  Opacity="0"
+                                  Visibility="Visible"/>
 
                                     <Path x:Name="Arrow"
                                   Grid.Column="4"
@@ -114,92 +115,9 @@
                             </Trigger>
                             <!-- Show checkmark when IsChecked is true -->
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Checkmark" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="Checkmark" Property="Opacity" Value="1"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Submenu header style (items that have children) -->
-        <Style x:Key="SubmenuHeaderStyle" TargetType="MenuItem">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="12,6"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="MenuItem">
-                        <Grid>
-                            <Border x:Name="Border"
-                                Background="{TemplateBinding Background}"
-                                Padding="{TemplateBinding Padding}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Icon"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Shortcut"/>
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Arrow"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <ContentPresenter Grid.Column="0"
-                                                  ContentSource="Icon"
-                                                  VerticalAlignment="Center"
-                                                  Margin="0,0,8,0"/>
-                                    <ContentPresenter Grid.Column="1"
-                                                  ContentSource="Header"
-                                                  VerticalAlignment="Center"
-                                                  TextBlock.Foreground="White"/>
-                                    <TextBlock Grid.Column="2"
-                                           Text="{TemplateBinding InputGestureText}"
-                                           Foreground="#99FFFFFF"
-                                           VerticalAlignment="Center"
-                                           Margin="16,0,0,0"/>
-                                    <Path Grid.Column="3"
-                                      Data="M0,0 L4,4 L0,8"
-                                      Stroke="White"
-                                      StrokeThickness="1.5"
-                                      VerticalAlignment="Center"
-                                      Margin="8,0,4,0"/>
-                                </Grid>
-                            </Border>
-
-                            <!-- The Popup that shows child items -->
-                            <Popup x:Name="SubMenuPopup"
-                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
-                               Placement="Right"
-                               HorizontalOffset="-4"
-                               Focusable="False"
-                               PopupAnimation="Fade"
-                               AllowsTransparency="True">
-                                <Border Background="#CC000000"
-                                    BorderBrush="#55FFFFFF"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="0,4">
-                                    <ItemsPresenter/>
-                                </Border>
-                            </Popup>
-                        </Grid>
-
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="#44FFFFFF"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#55FFFFFF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style TargetType="Separator">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Separator">
-                        <Border BorderBrush="#44FFFFFF" BorderThickness="0,1,0,0" Margin="8,2"/>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
