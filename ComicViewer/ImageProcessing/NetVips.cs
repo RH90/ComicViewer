@@ -223,7 +223,7 @@ public static class VipsImageFactory
                             //MainWindow.Log.add("Bands: " + temp.Interpretation, false);
                             scalingAlgo = Enums.Kernel.Lanczos2;
 
-                            if (temp.Interpretation == Interpretation.Multiband)
+                            if (temp.Interpretation == Interpretation.Multiband || temp.Interpretation == Interpretation.Rgb16)
                             {
                                 using Image labs = temp.Colourspace(Interpretation.Labs);
                                 //using Image sharpenImg = labs.ThumbnailImage(targetWidth, targetHeight, linear: true).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
@@ -234,15 +234,24 @@ public static class VipsImageFactory
                             {
                                 resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
                             }
-
                         }
                         else
                         {
-                            resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
+                            if (temp.Interpretation == Interpretation.Rgb16)
+                            {
+                                using Image labs = temp.Colourspace(Interpretation.Labs);
+                                //using Image sharpenImg = labs.ThumbnailImage(targetWidth, targetHeight, linear: true).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
+                                using Image sharpenImg = labs.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
+                                resized = sharpenImg.Colourspace(Interpretation.Srgb);
+                            }
+                            else
+                            {
+                                resized = temp.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
+                            }
+
                         }
 
                     }
-
                     //if (vipsImage.HasAlpha())
                     //{
                     //    using Image premul = vipsImage.Premultiply();

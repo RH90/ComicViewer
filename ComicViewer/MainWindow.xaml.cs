@@ -1421,7 +1421,7 @@ namespace ComicViewer
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                     CheckScaling(ScalingCatRom, isCurrentPage);
                 }
-                else if (diffRatio > 1.0)
+                else if (diffRatio > 0.9)
                 {
                     bs = VipsImageFactory.Scale(GetVipsImg(index, ms), (Enums.Kernel.Lanczos3), newWidth, newHeight, 1);
                     CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
@@ -1723,51 +1723,59 @@ namespace ComicViewer
 
         private void SaveJson(JsonComic jsonComic)
         {
-            this.Dispatcher.Invoke(() =>
+
+
+
+            //this.Dispatcher.Invoke(() =>
+            //{
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            if (_currentFile == "" || _currentFile == null)
             {
-                Stopwatch sw = new Stopwatch();
-                sw.Start();
-                if (_currentFile == "" || _currentFile == null)
+                return;
+            }
+
+            if (jsonComic != null && jsonComic.List.Count > 5000)
+            {
+                jsonComic.List = jsonComic.List.OrderByDescending(item => item.LastOpened).Take(4500).ToList<ComicItem>();
+            }
+
+            if (_currentComicItem != null)
+            {
+                jsonComic.List.RemoveAll((item) =>
                 {
-                    return;
-                }
-
-                if (_currentComicItem != null)
-                {
-                    jsonComic.List.RemoveAll((item) =>
-                    {
-                        return item.Name.Equals(_currentComicItem.Name);
-                    });
-                }
-                else
-                {
-                    _currentComicItem = new ComicItem();
-                    _currentComicItem.Name = _currentFile;
-                }
-                if (_currentFilePath != null && File.Exists(_currentFilePath))
-                {
-                    _currentComicItem.Parent = new FileInfo(_currentFilePath).Directory.FullName;
-                }
-                _currentComicItem.LastOpened = DateTime.Now.Ticks;
-                _currentComicItem.Pos = _currentPage;
-                //_currentComicItem.FitToWindow = !_isFitWidth;
+                    return item.Name.Equals(_currentComicItem.Name);
+                });
+            }
+            else
+            {
+                _currentComicItem = new ComicItem();
+                _currentComicItem.Name = _currentFile;
+            }
+            if (_currentFilePath != null && File.Exists(_currentFilePath))
+            {
+                _currentComicItem.Parent = new FileInfo(_currentFilePath).Directory.FullName;
+            }
+            _currentComicItem.LastOpened = DateTime.Now.Ticks;
+            _currentComicItem.Pos = _currentPage;
+            //_currentComicItem.FitToWindow = !_isFitWidth;
 
 
-                jsonComic.List.Add(_currentComicItem);
-                jsonComic.List.Sort(compare);
+            jsonComic.List.Add(_currentComicItem);
+            jsonComic.List.Sort(compare);
 
-                jsonComic.WindowX = (int)this.Left;
-                if ((int)this.Width < System.Windows.SystemParameters.PrimaryScreenWidth)
-                {
-                    jsonComic.WindowWidth = (int)this.Width;
-                    jsonComic.WindowHeight = (int)this.Height;
-                }
+            jsonComic.WindowX = (int)this.Left;
+            if ((int)this.Width < System.Windows.SystemParameters.PrimaryScreenWidth)
+            {
+                jsonComic.WindowWidth = (int)this.Width;
+                jsonComic.WindowHeight = (int)this.Height;
+            }
 
-                File.WriteAllText(jsonPath, JsonConvert.SerializeObject(jsonComic, Formatting.Indented));
+            File.WriteAllText(jsonPath, JsonConvert.SerializeObject(jsonComic, Formatting.Indented));
 
-                sw.Stop();
-                Log.add(String.Format("Save Json: {0}, page: {1}, timeSave: {2}", _currentComicItem.Name, _currentPage, sw.ElapsedMilliseconds), false);
-            }, DispatcherPriority.Send);
+            sw.Stop();
+            Log.add(String.Format("Save Json: {0}, page: {1}, timeSave: {2}", _currentComicItem.Name, _currentPage, sw.ElapsedMilliseconds), false);
+            //}, DispatcherPriority.Send);
 
 
         }
@@ -2513,6 +2521,43 @@ namespace ComicViewer
             fileopener.Start();
 
         }//OpenConfig_Click
+
+        private void RecentlyOpenedMenu_SubmenuOpened(object sender, RoutedEventArgs e)
+        {
+            JsonComic jsonComic = LoadJson();
+
+            List<ComicItem> list = jsonComic.List.OrderByDescending(item => item.LastOpened).Take(50).ToList();
+
+            RecentlyOpenedMenu.Items.Clear();
+
+            foreach (var item in list)
+            {
+                MenuItem menuItem = new MenuItem();
+                menuItem.MaxWidth = 500;
+                DateTime lastOpenedDate = new DateTime(item.LastOpened);
+
+                String dateStr = lastOpenedDate.ToString("yy-MM-dd HH:mm");
+
+                menuItem.Header = dateStr + ": " + item.Name;
+
+                string path = item.Parent != null ? Path.Join(item.Parent, item.Name) : item.Name;
+                menuItem.Click += (s, args) =>
+                {
+                    if (File.Exists(path))
+                    {
+                        LoadArchive(path);
+                    }
+                    else
+                    {
+                        MessageBox.Show("File not found: " + path);
+                    }
+                };
+
+                RecentlyOpenedMenu.Items.Add(menuItem);
+            }
+
+
+        }
     }
 
     // Helper to ensure "Page 2.jpg" comes before "Page 10.jpg"

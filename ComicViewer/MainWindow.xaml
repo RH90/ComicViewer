@@ -99,73 +99,31 @@
                 <MenuItem x:Name="ScalingCubic" Header="Cubic" Click="Scaling_Click" ></MenuItem>
                 <MenuItem x:Name="ScalingMitchell" Header="Mitchell" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingLinear" Header="Linear" Click="Scaling_Click" ></MenuItem>
-                <Separator x:Name="Seperator" BorderThickness="2" BorderBrush="Black"></Separator>
+                <Separator x:Name="Seperator"></Separator>
                 <MenuItem x:Name="ScalingUltraSharpLinear" Header="UltraSharp (Linear)" Click="Scaling_Click" ></MenuItem>
                 <MenuItem x:Name="ScalingUltraSharp" Header="UltraSharp" Click="Scaling_Click" ></MenuItem>
                 <MenuItem x:Name="ScalingCatRom" Header="Catrom" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingHermite" Header="Hermite" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingMitchellMS" Header="Mitchell (MS)" Click="Scaling_Click"></MenuItem>
-                <Separator x:Name="Seperator1" BorderThickness="2" BorderBrush="Black"></Separator>
+                <Separator x:Name="Seperator1"></Separator>
                 <MenuItem x:Name="ScalingAIHigh" Header="ScaleAI High" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingAIMedium" Header="ScaleAI Medium" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingAILow" Header="ScaleAI Low" Click="Scaling_Click"></MenuItem>
                 <MenuItem x:Name="ScalingAINone" Header="ScaleAI No noise reduction" Click="Scaling_Click"></MenuItem>
             </MenuItem>
             <MenuItem Header="Move To Trash" Click="MoveToTrash"/>
-            <MenuItem Header="Open Comic (.zip/.cbz)" Click="Open_Click" Foreground="Black"/>
+            <MenuItem Header="Open Comic (.zip/.cbz)" Click="Open_Click"/>
             <MenuItem Header="Open in Explorer" Click="ExploreZip"/>
             <MenuItem Header="Open Log" Click="OpenLog_Click"/>
             <MenuItem Header="Open Config" Click="OpenConfig_Click"/>
+            <MenuItem Header="Recently Opened" x:Name="RecentlyOpenedMenu"  SubmenuOpened="RecentlyOpenedMenu_SubmenuOpened">
+                <MenuItem Header="Placeholder"></MenuItem>
+            </MenuItem>
             <MenuItem Header="Close" Click="Menu_Closing"/>
         </ContextMenu>
     </Window.ContextMenu>
+
     <Window.Resources>
-        <Style x:Key="ScrollBarThumb" TargetType="{x:Type Thumb}">
-            <Setter Property="SnapsToDevicePixels" Value="True"/>
-            <Setter Property="OverridesDefaultStyle" Value="true"/>
-            <Setter Property="IsTabStop" Value="false"/>
-            <Setter Property="Focusable" Value="false"/>
 
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type Thumb}">
-                        <Border CornerRadius="2" Background="DarkGray" BorderBrush="DarkGray" BorderThickness="0" />
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <ControlTemplate x:Key="VerticalScrollBar" TargetType="{x:Type ScrollBar}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition MaxHeight="0"/>
-                    <RowDefinition Height="0.00001*"/>
-                    <RowDefinition MaxHeight="0"/>
-                </Grid.RowDefinitions>
-                <Border Grid.RowSpan="3" CornerRadius="0" Background="Black" />
-                <RepeatButton Grid.Row="0" Height="18" Command="ScrollBar.LineUpCommand" Content="M 0 4 L 8 4 L 4 0 Z" />
-                <Track Name="PART_Track" Grid.Row="1" IsDirectionReversed="true">
-
-                    <Track.Thumb>
-                        <Thumb  Style="{StaticResource ScrollBarThumb}" Margin="1,0,1,0"  />
-                    </Track.Thumb>
-
-                </Track>
-                <RepeatButton Grid.Row="3"  Height="18" Command="ScrollBar.LineDownCommand" Content="M 0 0 L 4 4 L 8 0 Z"/>
-            </Grid>
-        </ControlTemplate>
-
-        <Style x:Key="{x:Type ScrollBar}" TargetType="{x:Type ScrollBar}">
-            <Setter Property="SnapsToDevicePixels" Value="True"/>
-            <Setter Property="OverridesDefaultStyle" Value="true"/>
-            <Style.Triggers>
-
-                <Trigger Property="Orientation" Value="Vertical">
-                    <Setter Property="Width" Value="10"/>
-                    <Setter Property="Height" Value="Auto" />
-                    <Setter Property="Template" Value="{StaticResource VerticalScrollBar}" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
     </Window.Resources>
 </Window>
