@@ -315,11 +315,11 @@ public static class MagicScalerImageFactory
         // Frames[0] contains the corrected (post-EXIF-rotation) Width and Height.
         var frameInfo = ImageFileInfo.Load(data.AsSpan()).Frames[0];
 
-        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear);
+        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear, (double)frameInfo.Width / (double)targetWidth);
 
         using var pipeline = MagicImageProcessor.BuildPipeline(
                                  new MemoryStream(data, writable: false), settings);
-
+        Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={pipeline.Settings.UnsharpMask.Threshold},Amount={pipeline.Settings.UnsharpMask.Amount},Radius={pipeline.Settings.UnsharpMask.Radius}");
         return (PipelineToBitmapSource(pipeline.PixelSource), frameInfo.Width, frameInfo.Height);
     }
 
@@ -352,7 +352,7 @@ public static class MagicScalerImageFactory
         if (bands >= 3) SwapRedBlue(pixels, bands);
 
         using var src = new RawPixelSource(pixels, originalWidth, originalHeight, bands, BandsToWicGuid(bands));
-        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear);
+        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear, (double)originalWidth / (double)targetWidth);
 
         using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);
         return (PipelineToBitmapSource(pipeline.PixelSource), originalWidth, originalHeight);
@@ -385,9 +385,10 @@ public static class MagicScalerImageFactory
 
         // WIC outputs BGRA — already in the correct order for MagicScaler.
         using var src = new RawPixelSource(bgra, originalWidth, originalHeight, 4, WicGuid_Bgra32);
-        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear);
+        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear, (double)originalWidth / (double)targetWidth);
 
         using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);
+        Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={pipeline.Settings.UnsharpMask.Threshold},Amount={pipeline.Settings.UnsharpMask.Amount},Radius={pipeline.Settings.UnsharpMask.Radius}");
         return (PipelineToBitmapSource(pipeline.PixelSource), originalWidth, originalHeight);
     }
 
@@ -426,7 +427,7 @@ public static class MagicScalerImageFactory
     // -------------------------------------------------------------------------
 
     private static ProcessImageSettings BuildSettings(
-      int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear)
+      int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear, double ratio)
     {
 
         UnsharpMaskSettings us = new UnsharpMaskSettings(40, 1.5, 0x55);
@@ -437,7 +438,7 @@ public static class MagicScalerImageFactory
 
         var settings = new ProcessImageSettings
         {
-            //Anchor = CropAnchor.Bottom,
+            Anchor = CropAnchor.Top | CropAnchor.Left,
             BlendingMode = GammaMode.Companded,
             //BlendingMode = GammaMode.Linear,
             //UnsharpMask = us,
@@ -451,11 +452,17 @@ public static class MagicScalerImageFactory
         if (interpolation == InterpolationSettings.CatmullRom)
         {
             settings.Interpolation = InterpolationSettings.Lanczos;
-            settings.UnsharpMask = new UnsharpMaskSettings(30, 1.5, 0x45);
+            //settings.UnsharpMask = new UnsharpMaskSettings(30, 1.5, 0x45);
         }
         else if (interpolation == InterpolationSettings.Lanczos)
         {
-            settings.UnsharpMask = new UnsharpMaskSettings(40, 1.5, 0x30);
+            //settings.UnsharpMask = new UnsharpMaskSettings(40, 1.5, 0x30);
+        }
+        else if (interpolation == InterpolationSettings.Hermite)
+        {
+            settings.Interpolation = InterpolationSettings.Lanczos;
+            settings.UnsharpMask = new UnsharpMaskSettings(30, 1.5, 0x80);
+            //settings.UnsharpMask = new UnsharpMaskSettings(25, 1.5, 0x70);
         }
 
 
@@ -464,7 +471,7 @@ public static class MagicScalerImageFactory
             settings.BlendingMode = GammaMode.Linear;
             settings.ColorProfileMode = ColorProfileMode.Normalize;
         }
-        //Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={settings.UnsharpMask.Threshold},Amount={settings.UnsharpMask.Amount},Radius={settings.UnsharpMask.Radius}");
+
 
         if (targetWidth > 0) settings.Width = targetWidth;
         if (targetHeight > 0) settings.Height = targetHeight;
@@ -477,6 +484,11 @@ public static class MagicScalerImageFactory
                 ? CropScaleMode.Crop
                 : CropScaleMode.Stretch;
         }
+        if (ratio == 1)
+        {
+            settings.Sharpen = false;
+        }
+        //Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={settings.UnsharpMask.Threshold},Amount={settings.UnsharpMask.Amount},Radius={settings.UnsharpMask.Radius}");
 
         return settings;
     }

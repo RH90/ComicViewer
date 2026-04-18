@@ -26,6 +26,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using static ComicViewer.MainWindow;
 using Image = NetVips.Image;
 using Path = System.IO.Path;
 
@@ -50,7 +51,7 @@ namespace ComicViewer
         private System.Windows.Point _MouseHidePos;
         private double _startVerticalOffset;
         private bool _isDragging = false;
-        public static Enums.Kernel _scalingAlgo = Enums.Kernel.Nearest;
+        public static Scalers _scalingAlgo = Scalers.None;
         private string size = "";
         private string jsonPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\" + "comic.json";
         private System.Windows.Point _lastTitlePos;
@@ -83,10 +84,37 @@ namespace ComicViewer
         private bool _fixedScale = false;
         private List<(int, System.Windows.Controls.Image)> webToonList = new List<(int, System.Windows.Controls.Image)>();
         public static Log Log = new Log();
-        private bool _skipInQueue = false;
         private double _fixedImageWidth = 0.8;
         private double _fixedImageRatio = 1.0;
+        private int scrollUpdateInterval = 30;
 
+        private int _windowWidth = 0;
+        private int _windowHeight = 0;
+        private int _windowLeft = 0;
+        public enum Scalers
+        {
+            None,
+
+            VipsLanczos3Sharp,
+            VipsLanczos3,
+            VipsThumb,
+            VipsThumbL,
+            VipsLanczos2,
+            VipsMitchell,
+            VipsCubic,
+            VipsLinear,
+
+            MagicUltraSharp,
+            MagicUltraSharpLinear,
+            MagicCatRom,
+            MagicHermite,
+            MagicMitchell,
+
+            AINone,
+            AILow,
+            AIMedium,
+            AIHigh,
+        }
         public MainWindow()
         {
 
@@ -136,6 +164,8 @@ namespace ComicViewer
             _fixedImageWidth = jsonComic.FixedImageWidth > 0 ? jsonComic.FixedImageWidth : _fixedImageWidth;
             _fixedImageRatio = jsonComic.FixedImageRatio > 0 ? jsonComic.FixedImageRatio : _fixedImageRatio;
 
+            scrollUpdateInterval = jsonComic.ScrollUpdateInterval >= 0 ? jsonComic.ScrollUpdateInterval : scrollUpdateInterval;
+
             UpdateJsonTask();
             HideMouse();
             windowSizeChanged();
@@ -146,6 +176,7 @@ namespace ComicViewer
                 string argLower = args[i].ToLower();
                 if (argLower.Contains(".zip") ||
                     argLower.Contains(".cbz") ||
+                    argLower.Contains(".cbr") ||
                     argLower.Contains(".rar") ||
                     argLower.Contains(".7z"))
                 {
@@ -182,7 +213,8 @@ namespace ComicViewer
                        }
                        catch (Exception ex)
                        {
-
+                           Log.add(ex.Message, true);
+                           Log.add(ex.StackTrace, true);
                            //Debug.WriteLine("tttt");
                        }
                    }
@@ -256,6 +288,8 @@ namespace ComicViewer
                     catch (Exception exception)
                     {
                         //System.Diagnostics.Debug.WriteLine(exception.Message);
+                        Log.add(exception.Message, true);
+                        Log.add(exception.StackTrace, true);
                     }
                 }
 
@@ -307,7 +341,7 @@ namespace ComicViewer
             {
                 openFileDialog.InitialDirectory = System.IO.Path.GetDirectoryName(_currentFilePath);
             }
-            openFileDialog.Filter = "Comic Archives|*.zip;*.cbz;*.rar;*.7z";
+            openFileDialog.Filter = "Comic Archives|*.zip;*.cbz;*.cbr;*.rar;*.7z";
 
             if (openFileDialog.ShowDialog() == true)
             {
@@ -323,7 +357,7 @@ namespace ComicViewer
             _currentFile = Path.GetFileName(filePath);
             _currentFilePath = filePath;
             _currentPage = 0;
-            _scalingAlgo = Enums.Kernel.Nearest;
+            _scalingAlgo = Scalers.None;
 
             JsonComic jsonComic = LoadJson();
 
@@ -341,6 +375,7 @@ namespace ComicViewer
                 //SaveJson(jsonComic);
             }
 
+            _currentComicItem.LastOpened = DateTime.Now.Ticks;
 
 
             _archive?.Dispose();
@@ -349,7 +384,7 @@ namespace ComicViewer
             {
                 _archive = SharpCompress.Archives.SevenZip.SevenZipArchive.OpenArchive(filePath);
             }
-            else if (System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".rar"))
+            else if (System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".rar") || System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".cbr"))
             {
                 _archive = SharpCompress.Archives.Rar.RarArchive.OpenArchive(filePath);
             }
@@ -430,6 +465,11 @@ namespace ComicViewer
 
             // Lock the UI from further scroll-triggered page turns
             _isPageLoading = true;
+
+            _windowHeight = (int)this.Height;
+            _windowWidth = (int)this.Width;
+            _windowLeft = (int)this.Left;
+
             //
             //semDisplay.Wait();
             try
@@ -659,7 +699,8 @@ namespace ComicViewer
                      }
                      catch (Exception ex)
                      {
-
+                         Log.add(ex.Message, true);
+                         Log.add(ex.StackTrace, true);
                      }
                  }
 
@@ -751,7 +792,7 @@ namespace ComicViewer
                                                frame.ExtractBand(0),
                                                frame.ExtractBand(3) });
 
-                byte[] pixels = reordered.WriteToMemory();
+                byte[] pixels = reordered.WriteToMemory<byte>();
                 int stride = canvasWidth * 4;
                 int delay = delays != null && i < delays.Length ? Math.Max(delays[i], 20) : 100;
 
@@ -842,7 +883,8 @@ namespace ComicViewer
                 }
                 catch (Exception exception)
                 {
-                    //System.Diagnostics.Debug.WriteLine(exception.Message);
+                    Log.add(exception.Message, true);
+                    Log.add(exception.StackTrace, true);
                 }
 
             });
@@ -890,7 +932,8 @@ namespace ComicViewer
                 }
                 catch (Exception exception)
                 {
-                    //System.Diagnostics.Debug.WriteLine(exception.Message);
+                    Log.add(exception.Message, true);
+                    Log.add(exception.StackTrace, true);
                 }
 
             });
@@ -984,117 +1027,6 @@ namespace ComicViewer
                 SetTitleText("");
             }
         }
-
-        //private BitmapSource ScaleImage(BitmapSource imageToShow, int index, int srcWidth, int scrHeight)
-        //{
-        //    //System.Diagnostics.Debug.WriteLine("ScaleImage");
-        //    _cache.TryRemove(index, out _);
-        //    int OWidth = srcWidth;
-        //    int OHeight = scrHeight;
-
-        //    if (srcWidth == 0)
-        //    {
-        //        OWidth = (int)imageToShow.PixelWidth;
-        //        OHeight = (int)imageToShow.PixelHeight;
-        //    }
-
-
-        //    int viewWidth = (int)MainScroll.ViewportWidth;
-        //    int viewHeight = (int)MainScroll.ViewportHeight;
-
-        //    //WindowFit(_currentComicItem.FitToWindow, false, OWidth, OHeight);
-        //    //System.Diagnostics.Debug.WriteLine("Original: " + OWidth + "x" + OHeight);
-        //    //System.Diagnostics.Debug.WriteLine("View: " + viewWidth + "x" + viewHeight);
-        //    //this.Dispatcher.Invoke(new Action(() =>
-        //    //{
-
-        //    //    RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.NearestNeighbor);
-        //    //}));
-        //    double ratioView = (double)viewWidth / (double)viewHeight;
-        //    double ratioImg = (double)OWidth / (double)OHeight;
-
-        //    double ratioWidth = (double)OWidth / (double)viewWidth;
-        //    double ratioHeight = (double)OHeight / (double)viewHeight;
-
-        //    int newWidth = (int)viewWidth;
-        //    int newHeight = (int)Math.Round(OHeight / ratioWidth);
-
-        //    if (viewWidth > OWidth && _isFitWidth ||
-        //     !_isFitWidth && ((viewWidth > OWidth && ratioImg > ratioView) || (viewHeight > OHeight && ratioView > ratioImg)))
-        //    {
-        //        //System.Diagnostics.Debug.WriteLine("upscale");
-        //        BitmapSource bImg;
-        //        if (!_isFitWidth)
-        //        {
-        //            if (ratioImg > ratioView)
-        //            {
-        //                newHeight = (int)Math.Round(viewWidth / ratioImg);
-
-        //            }
-        //            else
-        //            {
-        //                newHeight = (int)viewHeight;
-        //                newWidth = (int)Math.Round(OWidth / ratioHeight);
-        //            }
-
-        //        }
-        //        bImg = NetVipsLanczosUpscaler.Upscale(imageToShow, newWidth, newHeight);
-        //        //_cache.TryAdd(index, new ImageContainer(bImg, OWidth, OHeight));
-        //        return bImg;
-        //    }
-        //    // Downscale with BitmapImage's built in decoder which is faster than resizing with
-        //    // Lanczos for large images that don't need to be resized as much
-        //    else
-        //    {
-        //        System.Diagnostics.Debug.WriteLine("Downscale");
-        //        if (!_isFitWidth)
-        //        {
-        //            if (ratioImg > ratioView)
-        //            {
-        //                newWidth = viewWidth;
-
-        //            }
-        //            else
-        //            {
-        //                newHeight = viewHeight;
-        //                newWidth = (int)Math.Round(OWidth / ratioHeight);
-        //            }
-        //        }
-        //        else
-        //        {
-        //            newWidth = viewWidth;
-        //        }
-
-        //        BitmapSource bImg = null;
-
-        //        bImg = new BitmapImage();
-
-        //        BmpBitmapEncoder encoder = new BmpBitmapEncoder();
-        //        //PngBitmapEncoder encoder = new PngBitmapEncoder();
-        //        //JpegBitmapEncoder encoder = new JpegBitmapEncoder();
-        //        //encoder.QualityLevel = 97; // Set JPEG quality level (0-100), adjust as needed
-        //        //encoder.
-        //        MemoryStream memoryStream = new MemoryStream();
-        //        // 2. Push the BitmapSource into the encoder
-        //        encoder.Frames.Add(BitmapFrame.Create(imageToShow));
-        //        // 3. Save the encoder's data to the stream
-        //        encoder.Save(memoryStream);
-        //        // 4. Initialize the BitmapImage from the stream
-        //        memoryStream.Position = 0;
-        //        ((BitmapImage)bImg).BeginInit();
-        //        ((BitmapImage)bImg).StreamSource = memoryStream;
-        //        ((BitmapImage)bImg).CacheOption = BitmapCacheOption.OnLoad; // Important for memory management
-        //        ((BitmapImage)bImg).DecodePixelWidth = newWidth;
-        //        ((BitmapImage)bImg).DecodePixelHeight = newHeight;
-        //        ((BitmapImage)bImg).EndInit();
-
-
-        //        bImg.Freeze();
-        //        return bImg;
-        //    }
-
-        //}
-
         private async Task<BitmapSource> LoadAndProcessImage(int index, bool isCurrentPage)
         {
 
@@ -1189,141 +1121,17 @@ namespace ComicViewer
                     _pages[index].Key.ToLower().Contains(".gif")
                    )
                     {
-                        //BitmapSource image = null;
-                        //ms.Position = 0;
-
-
-                        //image = new BitmapImage();
-                        //((BitmapImage)image).BeginInit();
-                        //((BitmapImage)image).CacheOption = BitmapCacheOption.OnLoad;
-
-                        //((BitmapImage)image).StreamSource = ms;
-                        ////image.Freeze();
-                        //((BitmapImage)image).EndInit();
-                        //int OWidth, OHeight;
                         BitmapSource bs;
-
-                        //if ((System.Windows.SystemParameters.PrimaryScreenWidth / 2) >= MainScroll.ScrollableWidth && _isFitWidth)
-                        //{
-                        //    MagicScaler(index, ms, out bs, out OWidth, out OHeight);
-                        //}
-                        //else
-                        //{
-                        //    NetVips(index, ms, out OWidth, out OHeight, out bs);
-                        //}
-
-
-                        //if (Enums.Kernel.Mitchell == _scalingAlgo)
-                        //{
-                        //    MagicScaler(index, ms, out bs, out OWidth, out OHeight);
-                        //}
-                        //else
-                        //{
-                        NetVips(index, ms, out OWidth, out OHeight, out bs, isCurrentPage);
-                        //}
-
-                        //bs = Sharpen.UnsharpMask(bs);
-                        //bs.Freeze();
-
-
-                        //bs = ScaleImage(bs, index, 0, 0);
-                        //_cache.TryAdd(index, new ImageContainer(bs, OWidth, OHeight));
-
+                        ProcessImage(index, ms, out OWidth, out OHeight, out bs, isCurrentPage);
                         imageToShow = bs;
                     }
                     else
                     {
-                        //Debug.WriteLine("Error image read");
                         Log.add("Error image read", true);
-
-                        //OWidth = 0;
-                        //OHeight = 0;
-                        //int newWidth = 0;
-                        //int newHeight = 0;
-
-                        //try
-                        //{
-                        //    ms.Position = 0;
-                        //    var directories = ImageMetadataReader.ReadMetadata(ms);
-                        //    foreach (var directory in directories)
-                        //        foreach (var tag in directory.Tags)
-                        //        {
-                        //            if (tag.Name.Contains("Width") && int.TryParse(Regex.Replace(tag.Description, @"[^0-9]", ""), out int width))
-                        //            {
-                        //                OWidth = width;
-                        //            }
-                        //            else if (tag.Name.Contains("Height") && int.TryParse(Regex.Replace(tag.Description, @"[^0-9]", ""), out int height))
-                        //            {
-                        //                OHeight = height;
-                        //            }
-                        //            //System.Diagnostics.Debug.WriteLine("{0} : {1}", tag.Name, tag.Description);
-                        //        }
-                        //}
-                        //catch (Exception ex)
-                        //{
-                        //    //System.Diagnostics.Debug.WriteLine(ex.Message);
-                        //    //System.Diagnostics.Debug.WriteLine(ex.StackTrace);
-                        //}
-                        //bool useUpscale = true;
-
-                        //if (_isFitWidth && OWidth > (int)MainScroll.ViewportWidth)
-                        ////if (_isFitWidth)
-                        //{
-                        //    newWidth = (int)MainScroll.ViewportWidth;
-                        //    useUpscale = false;
-                        //}
-
-                        //else if (!_isFitWidth && (OHeight > (int)MainScroll.ViewportHeight || OWidth > (int)MainScroll.ViewportWidth))
-                        ////else if (!_isFitWidth)
-                        //{
-                        //    double ratioView = (double)MainScroll.ViewportWidth / (double)MainScroll.ViewportHeight;
-                        //    double ratioImg = (double)OWidth / (double)OHeight;
-                        //    if (ratioImg > ratioView)
-                        //    {
-                        //        newWidth = (int)MainScroll.ViewportWidth;
-                        //    }
-                        //    else
-                        //    {
-                        //        newHeight = (int)MainScroll.ViewportHeight;
-                        //    }
-                        //    useUpscale = false;
-                        //}
-
-                        //BitmapSource image = null;
-                        //ms.Position = 0;
-
-
-                        //image = new BitmapImage();
-                        //((BitmapImage)image).BeginInit();
-                        //((BitmapImage)image).CacheOption = BitmapCacheOption.OnLoad;
-                        //if (newWidth > 0)
-                        //{
-                        //    ((BitmapImage)image).DecodePixelWidth = newWidth;
-                        //}
-                        //else if (newHeight > 0)
-                        //{
-                        //    ((BitmapImage)image).DecodePixelHeight = newHeight;
-                        //}
-                        //((BitmapImage)image).StreamSource = ms;
-                        ////image.Freeze();
-                        //((BitmapImage)image).EndInit();
-                        //if (useUpscale)
-                        //{
-                        //    OWidth = (int)image.PixelWidth;
-                        //    OHeight = (int)image.PixelHeight;
-                        //    image = ScaleImage(image, index, 0, 0);
-                        //}
-
-                        //image.Freeze();
-                        ////_cache.TryAdd(index, new ImageContainer(image, OWidth, OHeight));
-
-                        //imageToShow = image;
                     }
                 }
                 catch (Exception ex)
                 {
-                    //System.Diagnostics.Debug.WriteLine(ex.Message);
-                    //System.Diagnostics.Debug.WriteLine(ex.StackTrace);
                     Log.add(ex.Message, true);
                     Log.add(ex.StackTrace, true);
 
@@ -1349,7 +1157,7 @@ namespace ComicViewer
             });
         }
 
-        private void NetVips(int index, MemoryStream ms, out int OWidth, out int OHeight, out BitmapSource bs, bool isCurrentPage)
+        private void ProcessImage(int index, MemoryStream ms, out int OWidth, out int OHeight, out BitmapSource bs, bool isCurrentPage)
         {
             (OWidth, OHeight) = ImageDimensionReader.Read(ms);
 
@@ -1385,7 +1193,7 @@ namespace ComicViewer
             }
             //Debug.WriteLine("With:{0} Height:{1}", newWidth, newHeight);
 
-            Enums.Kernel scalingAlgo = _scalingAlgo;
+            Scalers scalingAlgo = _scalingAlgo;
 
             if (_fixedScale)
             {
@@ -1406,7 +1214,7 @@ namespace ComicViewer
                 newHeight = OHeight;
             }
 
-            if (scalingAlgo == Enums.Kernel.Nearest)
+            if (scalingAlgo == Scalers.None)
             {
                 double diffRatio = (double)newWidth / (double)OWidth;
 
@@ -1421,9 +1229,9 @@ namespace ComicViewer
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                     CheckScaling(ScalingCatRom, isCurrentPage);
                 }
-                else if (diffRatio > 0.9)
+                else if (diffRatio >= 0.9)
                 {
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), (Enums.Kernel.Lanczos3), newWidth, newHeight, 1);
+                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), Scalers.VipsLanczos3, newWidth, newHeight, 1);
                     CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
                 }
                 //if (diffRatio >= 1.6)
@@ -1436,14 +1244,14 @@ namespace ComicViewer
                 //    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                 //    CheckScaling(ScalingCatRom, isCurrentPage);
                 //}
-                else if (diffRatio > 0.7)
+                else if (diffRatio >= 0.7)
                 {
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), (Enums.Kernel.Lanczos3), newWidth, newHeight, 0);
+                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), Scalers.VipsLanczos3, newWidth, newHeight, 0);
                     CheckScaling(ScalingLanczos3, isCurrentPage);
                 }
                 else
                 {
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), (Enums.Kernel.Lanczos2), newWidth, newHeight, 0);
+                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), Scalers.VipsLanczos2, newWidth, newHeight, 0);
                     CheckScaling(ScalingLanczos2, isCurrentPage);
                     //bs = VipsImageFactory.Scale(GetVipsImg(index, ms), (Enums.Kernel.Mitchell), newWidth, newHeight, 0);
                     //CheckScaling(ScalingMitchell, isCurrentPage);
@@ -1454,30 +1262,30 @@ namespace ComicViewer
             }
             else
             {
-                if (scalingAlgo == (Enums.Kernel)11)
+                if (scalingAlgo == Scalers.MagicUltraSharp)
                 {
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Lanczos, false);
                 }
-                else if (scalingAlgo == (Enums.Kernel)14)
+                else if (scalingAlgo == Scalers.MagicMitchell)
                 {
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Mitchell, false);
                 }
-                else if (scalingAlgo == (Enums.Kernel)15)
+                else if (scalingAlgo == Scalers.MagicHermite)
                 {
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Hermite, false);
                 }
-                else if (scalingAlgo == (Enums.Kernel)16)
+                else if (scalingAlgo == Scalers.MagicCatRom)
                 {
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                 }
-                else if (scalingAlgo == (Enums.Kernel)17)
+                else if (scalingAlgo == Scalers.MagicUltraSharpLinear)
                 {
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Lanczos, true);
                 }
                 else
                 {
                     int sharpenLevel = 0;
-                    if (scalingAlgo == (Enums.Kernel)25)
+                    if (scalingAlgo == Scalers.VipsLanczos3Sharp)
                     {
                         sharpenLevel = 1;
                     }
@@ -1489,10 +1297,10 @@ namespace ComicViewer
 
             }
             if (OWidth < System.Windows.SystemParameters.PrimaryScreenWidth &&
-                       (scalingAlgo == (Enums.Kernel)20 ||
-                       scalingAlgo == (Enums.Kernel)21 ||
-                       scalingAlgo == (Enums.Kernel)22 ||
-                       scalingAlgo == (Enums.Kernel)23))
+                       (scalingAlgo == Scalers.AINone ||
+                       scalingAlgo == Scalers.AILow ||
+                       scalingAlgo == Scalers.AIMedium ||
+                       scalingAlgo == Scalers.AIHigh))
             {
                 double vScale = newWidth / OWidth;
                 int AiScale = 2;
@@ -1723,9 +1531,6 @@ namespace ComicViewer
 
         private void SaveJson(JsonComic jsonComic)
         {
-
-
-
             //this.Dispatcher.Invoke(() =>
             //{
             Stopwatch sw = new Stopwatch();
@@ -1756,7 +1561,7 @@ namespace ComicViewer
             {
                 _currentComicItem.Parent = new FileInfo(_currentFilePath).Directory.FullName;
             }
-            _currentComicItem.LastOpened = DateTime.Now.Ticks;
+
             _currentComicItem.Pos = _currentPage;
             //_currentComicItem.FitToWindow = !_isFitWidth;
 
@@ -1764,11 +1569,11 @@ namespace ComicViewer
             jsonComic.List.Add(_currentComicItem);
             jsonComic.List.Sort(compare);
 
-            jsonComic.WindowX = (int)this.Left;
-            if ((int)this.Width < System.Windows.SystemParameters.PrimaryScreenWidth)
+            jsonComic.WindowX = _windowLeft;
+            if (_windowWidth < System.Windows.SystemParameters.PrimaryScreenWidth)
             {
-                jsonComic.WindowWidth = (int)this.Width;
-                jsonComic.WindowHeight = (int)this.Height;
+                jsonComic.WindowWidth = _windowWidth;
+                jsonComic.WindowHeight = _windowHeight;
             }
 
             File.WriteAllText(jsonPath, JsonConvert.SerializeObject(jsonComic, Formatting.Indented));
@@ -1941,28 +1746,68 @@ namespace ComicViewer
             }
             WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
         }
-        bool skip = true;
+        int skip = 10;
+        double _lastoffset = -1;
+        static long _lastScrollStart = DateTime.Now.Ticks / 10000;
         private void MainScroll_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
+            long timeNow = DateTime.Now.Ticks / 10000;
+            //Debug.WriteLine((timeNow + " . " + _lastScrollStart));
 
 
-            if (_isDragging && !_isPageLoading && skip)
+            if (_isDragging && !_isPageLoading && (timeNow - _lastScrollStart) > scrollUpdateInterval)
             {
+                _lastScrollStart = timeNow;
+                skip = -1;
                 Point currentPosition = e.GetPosition(MainScroll);
+
+                //if (_lastoffset != -1)
+                //{
+                //    _lastoffset = currentPosition.Y;
+                //}
+                //else if (_lastoffset == currentPosition.Y)
+                //{
+                //    return;
+                //}
+                //_lastoffset = currentPosition.Y;
+
+
 
                 // Calculate how far the mouse has moved
                 int deltaY = (int)(currentPosition.Y - _lastMousePosition.Y);
+                double offset = Math.Round(_startVerticalOffset - deltaY * 4);
+
+                //Debug.WriteLine("Move: " + offset + " . " + MainScroll.VerticalOffset);
+                //if (MainScroll.VerticalOffset != _lastoffset && _lastoffset != -1)
+                //{
+                //    return;
+                //}
+                //_lastoffset = offset;
+                //Debug.WriteLine(Math.Round(_startVerticalOffset - deltaY * 2.5));
+                //Debug.WriteLine(_lastMousePosition.Y);
                 // Update the scroll position. 
                 // We subtract the delta because "pulling" the mouse down 
                 // should move the scrollbar UP (scrolling towards the top).
-                MainScroll.ScrollToVerticalOffset(_startVerticalOffset - deltaY * 2);
+                //this.Dispatcher.Invoke(() =>
+                //{
+                MainScroll.ScrollToVerticalOffset(offset);
 
-                //e.Handled = true;
+                //}, DispatcherPriority.Send);
+
+                //MainScroll.ScrollToVerticalOffset(offset);
+
+
+                //e.Handled = false;
                 // Optional: If you want to use the "Push to turn page" logic while dragging,
                 // you would check the boundaries here. However, usually dragging 
                 // is best kept strictly for viewing the current page.
             }
-            skip = !skip;
+            if (_isDragging)
+            {
+                _lastoffset = -1;
+                skip = skip + 1;
+            }
+
 
         }
 
@@ -2061,6 +1906,10 @@ namespace ComicViewer
             if (_IsWebtoon)
             {
                 _currentPage = Math.Max(_currentPage - 3, 0);
+            }
+            if (_currentComicItem != null)
+            {
+                _currentComicItem.LastOpened = DateTime.Now.Ticks;
             }
             SaveJson(LoadJson());
             try
@@ -2200,7 +2049,8 @@ namespace ComicViewer
                       }
                       catch (ThreadInterruptedException ex)
                       {
-
+                          Log.add(ex.Message, true);
+                          Log.add(ex.StackTrace, true);
                       }
                   }
 
@@ -2239,7 +2089,8 @@ namespace ComicViewer
                     }
                     catch (Exception ex)
                     {
-
+                        Log.add(ex.Message, true);
+                        Log.add(ex.StackTrace, true);
                     }
             }));
             thSliderChanged.Start();
@@ -2356,76 +2207,24 @@ namespace ComicViewer
                     ((MenuItem)item).IsChecked = false;
             }
 
+            if (sender == ScalingLanczos3) _scalingAlgo = Scalers.VipsLanczos3;
+            else if (sender == ScalingLanczos2) _scalingAlgo = Scalers.VipsLanczos2;
+            else if (sender == ScalingLinear) _scalingAlgo = Scalers.VipsLinear;
+            else if (sender == ScalingMitchell) _scalingAlgo = Scalers.VipsMitchell;
+            else if (sender == ScalingThumb) _scalingAlgo = Scalers.VipsThumb;
+            else if (sender == ScalingThumbL) _scalingAlgo = Scalers.VipsThumbL;
+            else if (sender == ScalingCubic) _scalingAlgo = Scalers.VipsCubic;
+            else if (sender == ScalingUltraSharp) _scalingAlgo = Scalers.MagicUltraSharp;
+            else if (sender == ScalingUltraSharpLinear) _scalingAlgo = Scalers.MagicUltraSharpLinear;
+            else if (sender == ScalingMitchellMS) _scalingAlgo = Scalers.MagicMitchell;
+            else if (sender == ScalingHermite) _scalingAlgo = Scalers.MagicHermite;
+            else if (sender == ScalingCatRom) _scalingAlgo = Scalers.MagicCatRom;
+            else if (sender == ScalingAINone) _scalingAlgo = Scalers.AINone;
+            else if (sender == ScalingAILow) _scalingAlgo = Scalers.AILow;
+            else if (sender == ScalingAIMedium) _scalingAlgo = Scalers.AIMedium;
+            else if (sender == ScalingAIHigh) _scalingAlgo = Scalers.AIHigh;
+            else if (sender == ScalingLanczos3Sharp) _scalingAlgo = Scalers.VipsLanczos3Sharp;
 
-
-            if (sender == ScalingLanczos3)
-            {
-                _scalingAlgo = Enums.Kernel.Lanczos3;
-            }
-            else if (sender == ScalingLanczos2)
-            {
-                _scalingAlgo = Enums.Kernel.Lanczos2;
-            }
-            else if (sender == ScalingLinear)
-            {
-                _scalingAlgo = Enums.Kernel.Linear;
-            }
-            else if (sender == ScalingMitchell)
-            {
-                _scalingAlgo = Enums.Kernel.Mitchell;
-            }
-            else if (sender == ScalingThumb)
-            {
-                _scalingAlgo = (Enums.Kernel)12;
-            }
-            else if (sender == ScalingThumbL)
-            {
-                _scalingAlgo = (Enums.Kernel)13;
-            }
-            else if (sender == ScalingCubic)
-            {
-                _scalingAlgo = Enums.Kernel.Cubic;
-            }
-            else if (sender == ScalingUltraSharp)
-            {
-                _scalingAlgo = (Enums.Kernel)11;
-            }
-            else if (sender == ScalingUltraSharpLinear)
-            {
-                _scalingAlgo = (Enums.Kernel)17;
-            }
-            else if (sender == ScalingMitchellMS)
-            {
-                _scalingAlgo = (Enums.Kernel)14;
-            }
-            else if (sender == ScalingHermite)
-            {
-                _scalingAlgo = (Enums.Kernel)15;
-            }
-            else if (sender == ScalingCatRom)
-            {
-                _scalingAlgo = (Enums.Kernel)16;
-            }
-            else if (sender == ScalingAINone)
-            {
-                _scalingAlgo = (Enums.Kernel)20;
-            }
-            else if (sender == ScalingAILow)
-            {
-                _scalingAlgo = (Enums.Kernel)21;
-            }
-            else if (sender == ScalingAIMedium)
-            {
-                _scalingAlgo = (Enums.Kernel)22;
-            }
-            else if (sender == ScalingAIHigh)
-            {
-                _scalingAlgo = (Enums.Kernel)23;
-            }
-            else if (sender == ScalingLanczos3Sharp)
-            {
-                _scalingAlgo = (Enums.Kernel)25;
-            }
 
             Debug.WriteLine(_scalingAlgo);
 
@@ -2536,10 +2335,26 @@ namespace ComicViewer
                 menuItem.MaxWidth = 500;
                 DateTime lastOpenedDate = new DateTime(item.LastOpened);
 
-                String dateStr = lastOpenedDate.ToString("yy-MM-dd HH:mm");
+                //String dateStr = lastOpenedDate.ToString("yy-MM-dd HH:mm");
+                String dateStr = "";
+                TimeSpan timeDiff = DateTime.Now.Subtract(lastOpenedDate);
 
-                menuItem.Header = dateStr + ": " + item.Name;
+                if ((int)timeDiff.TotalDays > 0)
+                {
+                    dateStr = (int)timeDiff.TotalDays + " days ago";
+                }
+                else if ((int)timeDiff.TotalHours > 0)
+                {
+                    dateStr = (int)timeDiff.TotalHours + " hours ago";
+                }
+                else
+                {
+                    dateStr = (int)timeDiff.TotalMinutes + " min ago";
+                }
 
+
+                menuItem.Header = dateStr.PadLeft(15) + ": " + item.Name;
+                menuItem.IsCheckable = false;
                 string path = item.Parent != null ? Path.Join(item.Parent, item.Name) : item.Name;
                 menuItem.Click += (s, args) =>
                 {

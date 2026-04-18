@@ -11,6 +11,7 @@ namespace ComicViewer.Objects
         private int windowX = 100;
         private double fixedImageWidth = 0.8;
         private double fixedImageRatio = 1.0;
+        private int scrollUpdateInterval = 30;
         private List<ComicItem> list = new List<ComicItem>();
         private int listCount = 0;
 
@@ -19,6 +20,7 @@ namespace ComicViewer.Objects
         public int WindowHeight { get => windowHeight; set => windowHeight = value; }
         public double FixedImageWidth { get => fixedImageWidth; set => fixedImageWidth = value; }
         public double FixedImageRatio { get => fixedImageRatio; set => fixedImageRatio = value; }
+        public int ScrollUpdateInterval { get => scrollUpdateInterval; set => scrollUpdateInterval = value; }
 
         public int ListCount { get => List.Count; set => listCount = value; }
         public List<ComicItem> List { get => list; set => list = value; }

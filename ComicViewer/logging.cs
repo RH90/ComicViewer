@@ -7,13 +7,13 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Shapes;
 using System.Windows.Threading;
-using static ComicViewer.logging;
+using static ComicViewer.Logging;
 using Path = System.IO.Path;
 
 
 namespace ComicViewer
 {
-    internal class logging
+    internal class Logging
     {
         public class CustomFileLoggerProvider : ILoggerProvider
         {
@@ -157,11 +157,7 @@ namespace ComicViewer
         private string _logMain = Path.Join(AppDomain.CurrentDomain.BaseDirectory, "log", "logMain.log");
         private string _logTmp = Path.Join(AppDomain.CurrentDomain.BaseDirectory, "log", "logTmp.log");
         private int maxFileSize = 1000000;
-
-        private int _numberOfTries;
         private SemaphoreSlim semFile = new SemaphoreSlim(1, 1);
-
-        private int _timeIntervalBetweenTries;
         private FileStream GetStream()
         {
             for (int i = 0; i < 5; i++)
@@ -195,6 +191,8 @@ namespace ComicViewer
                 }
                 catch (IOException e)
                 {
+                    MainWindow.Log.add(e.Message, true);
+                    MainWindow.Log.add(e.StackTrace, true);
                     //Debug.WriteLine(e.StackTrace);
                 }
                 Thread.Sleep(10);

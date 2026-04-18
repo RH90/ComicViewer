@@ -27,7 +27,7 @@
         <Style TargetType="MenuItem">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Padding" Value="0,4"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="MenuItem">
@@ -48,7 +48,7 @@
                                               Grid.Column="0"
                                               ContentSource="Icon"
                                               VerticalAlignment="Center"
-                                              Margin="0,0,8,0"/>
+                                              Margin="0,0,7,0"/>
                                     <ContentPresenter Grid.Column="1"
                                               ContentSource="Header"
                                               RecognizesAccessKey="True"
@@ -58,7 +58,7 @@
                                        Text="{TemplateBinding InputGestureText}"
                                        Foreground="#99FFFFFF"
                                        VerticalAlignment="Center"
-                                       Margin="16,0,0,0"/>
+                                       Margin="0,0,0,0"/>
 
                                     <!-- Checkmark column -->
                                     <Path x:Name="Checkmark"
@@ -70,7 +70,7 @@
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round"
                                   VerticalAlignment="Center"
-                                  Margin="12,0,0,0"
+                                  Margin="0,0,0,0"
                                   Opacity="0"
                                   Visibility="Visible"/>
 
