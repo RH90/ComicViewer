@@ -3,6 +3,7 @@
 using ComicViewer.Imaging;
 using ComicViewer.Objects;
 using LibVLCSharp.Shared;
+using MangaListWPF;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Gif;
 using Microsoft.VisualBasic.FileIO;
@@ -25,6 +26,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using static ComicViewer.MainWindow;
 using Image = NetVips.Image;
@@ -87,7 +89,7 @@ namespace ComicViewer
         private double _fixedImageWidth = 0.8;
         private double _fixedImageRatio = 1.0;
         private int scrollUpdateInterval = 30;
-
+        private SQL sql;
         private int _windowWidth = 0;
         private int _windowHeight = 0;
         private int _windowLeft = 0;
@@ -140,6 +142,8 @@ namespace ComicViewer
 
         private JsonComic LoadJson()
         {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
             JsonComic jsonComic = new JsonComic();
 
             if (!File.Exists(jsonPath))
@@ -150,6 +154,10 @@ namespace ComicViewer
             {
                 jsonComic = JsonConvert.DeserializeObject<JsonComic>(File.ReadAllText(jsonPath));
             }
+            sw.Stop();
+
+            Log.add("Load json: " + sw.ElapsedMilliseconds + " ms", false);
+
             return jsonComic;
         }
 
@@ -165,6 +173,8 @@ namespace ComicViewer
             _fixedImageRatio = jsonComic.FixedImageRatio > 0 ? jsonComic.FixedImageRatio : _fixedImageRatio;
 
             scrollUpdateInterval = jsonComic.ScrollUpdateInterval >= 0 ? jsonComic.ScrollUpdateInterval : scrollUpdateInterval;
+            //Debug.WriteLine(jsonComic.List.Count);
+            sql = new SQL(jsonComic.DbPath);
 
             UpdateJsonTask();
             HideMouse();
@@ -345,7 +355,7 @@ namespace ComicViewer
 
             if (openFileDialog.ShowDialog() == true)
             {
-                LoadArchive(openFileDialog.FileName);
+                OpenFile(openFileDialog.FileName);
             }
 
 
@@ -354,6 +364,8 @@ namespace ComicViewer
 
         private void LoadArchive(string filePath)
         {
+            filePath = filePath.Replace("\\\\?\\", "");
+            Debug.WriteLine("LoadArchive: " + Path.GetFullPath(filePath));
             _currentFile = Path.GetFileName(filePath);
             _currentFilePath = filePath;
             _currentPage = 0;
@@ -361,20 +373,23 @@ namespace ComicViewer
 
             JsonComic jsonComic = LoadJson();
 
-            _currentComicItem = jsonComic.List.Find(item =>
-            {
-                if (item.Name == _currentFile) return true;
-                else return false;
-            });
+            //_currentComicItem = jsonComic.List.Values.FirstOrDefault(item =>
+            //{
+            //    if (item.Name == _currentFile) return true;
+            //    else return false;
+            //});
+            _currentComicItem = sql.getComic(_currentFile);
+
             System.Diagnostics.Debug.WriteLine("currentComicItem: " + _currentComicItem);
             if (_currentComicItem == null)
             {
                 _currentComicItem = new ComicItem();
                 _currentComicItem.Name = _currentFile;
-                jsonComic.List.Add(_currentComicItem);
+                sql.add(_currentComicItem);
+                //jsonComic.List.Add(_currentComicItem.Name.ToLower(), _currentComicItem);
                 //SaveJson(jsonComic);
             }
-
+            _currentComicItem.Parent = new FileInfo(filePath).Directory.FullName;
             _currentComicItem.LastOpened = DateTime.Now.Ticks;
 
 
@@ -431,6 +446,12 @@ namespace ComicViewer
 
             if (_pages.Any()) {; DisplayPage(1, 0); }
             WindowFit(_currentComicItem.FitToWindow, false, 0, 0);
+
+            //SQL sql = new SQL(jsonComic.DbPath);
+            //for (int i = 0; i < jsonComic.List.Count; i++)
+            //{
+            //    sql.add(jsonComic.List.ElementAt(i).Value.Name, jsonComic.List.ElementAt(i).Value.Pos, jsonComic.List.ElementAt(i).Value.FitToWindow ? 1 : 0, (jsonComic.List.ElementAt(i).Value.LastOpened), jsonComic.List.ElementAt(i).Value.Parent);
+            //}
 
         }
 
@@ -691,7 +712,7 @@ namespace ComicViewer
                                  Thread.Sleep(1000);
                                  _updateJsonCnt--;
                              }
-                             SaveJson(LoadJson());
+                             SaveJson(LoadJson(), 2);
                              System.GC.Collect();
                              Log.add("Update json", false);
                              //System.Diagnostics.Debug.WriteLine("Update json");
@@ -1132,6 +1153,7 @@ namespace ComicViewer
                 }
                 catch (Exception ex)
                 {
+                    Log.add(_pages[index].Key, true);
                     Log.add(ex.Message, true);
                     Log.add(ex.StackTrace, true);
 
@@ -1520,7 +1542,7 @@ namespace ComicViewer
 
             if (forceUpdate || _isFitWidth != checkFit)
             {
-                SaveJson(LoadJson());
+                //SaveJson(LoadJson(), 1);
                 _cache.Clear();
                 //Log.add(String.Format("WindowFit"), false);
                 DisplayPage(0, 55);
@@ -1529,7 +1551,7 @@ namespace ComicViewer
 
         }
 
-        private void SaveJson(JsonComic jsonComic)
+        private void SaveJson(JsonComic jsonComic, int method)
         {
             //this.Dispatcher.Invoke(() =>
             //{
@@ -1540,17 +1562,24 @@ namespace ComicViewer
                 return;
             }
 
-            if (jsonComic != null && jsonComic.List.Count > 5000)
-            {
-                jsonComic.List = jsonComic.List.OrderByDescending(item => item.LastOpened).Take(4500).ToList<ComicItem>();
-            }
+            //if (jsonComic != null && jsonComic.List.Count > 5000)
+            //{
+            //    jsonComic.List = jsonComic.List.OrderByDescending(item => item.LastOpened).Take(4500).ToList<ComicItem>();
+            //}
 
             if (_currentComicItem != null)
             {
-                jsonComic.List.RemoveAll((item) =>
-                {
-                    return item.Name.Equals(_currentComicItem.Name);
-                });
+                //int index = jsonComic.List.BinarySearch(_currentComicItem, compare);
+                //if (index >= 0)
+                //{
+                //    jsonComic.List.RemoveAt(index);
+                //}
+                //new SQL(jsonComic.DbPath).(_currentComicItem.Name);
+                //jsonComic.List.Remove(_currentComicItem.Name.ToLower());
+                //jsonComic.List.RemoveAll((item) =>
+                //{
+                //    return item.Name.Equals(_currentComicItem.Name);
+                //});
             }
             else
             {
@@ -1560,14 +1589,14 @@ namespace ComicViewer
             if (_currentFilePath != null && File.Exists(_currentFilePath))
             {
                 _currentComicItem.Parent = new FileInfo(_currentFilePath).Directory.FullName;
+                //_currentComicItem.Parent = Path.GetDirectoryName(_currentFilePath);
             }
-
+            //Log.add(_currentFilePath, false);
             _currentComicItem.Pos = _currentPage;
             //_currentComicItem.FitToWindow = !_isFitWidth;
 
-
-            jsonComic.List.Add(_currentComicItem);
-            jsonComic.List.Sort(compare);
+            sql.add(_currentComicItem);
+            //jsonComic.List.Sort(compare);
 
             jsonComic.WindowX = _windowLeft;
             if (_windowWidth < System.Windows.SystemParameters.PrimaryScreenWidth)
@@ -1579,7 +1608,7 @@ namespace ComicViewer
             File.WriteAllText(jsonPath, JsonConvert.SerializeObject(jsonComic, Formatting.Indented));
 
             sw.Stop();
-            Log.add(String.Format("Save Json: {0}, page: {1}, timeSave: {2}", _currentComicItem.Name, _currentPage, sw.ElapsedMilliseconds), false);
+            Log.add(String.Format("Save Json: {0}, page: {1}, timeSave: {2}, method: {3}", _currentComicItem.Name, _currentPage, sw.ElapsedMilliseconds, method), false);
             //}, DispatcherPriority.Send);
 
 
@@ -1749,67 +1778,29 @@ namespace ComicViewer
         int skip = 10;
         double _lastoffset = -1;
         static long _lastScrollStart = DateTime.Now.Ticks / 10000;
-        private void MainScroll_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-        {
-            long timeNow = DateTime.Now.Ticks / 10000;
-            //Debug.WriteLine((timeNow + " . " + _lastScrollStart));
+        //private void MainScroll_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        //{
+        //    long timeNow = DateTime.Now.Ticks / 10000;
+        //    //Debug.WriteLine((timeNow + " . " + _lastScrollStart));
 
+        //    if (_isDragging && !_isPageLoading && (timeNow - _lastScrollStart) > scrollUpdateInterval)
+        //    {
+        //        _lastScrollStart = timeNow;
+        //        skip = -1;
+        //        Point currentPosition = e.GetPosition(MainScroll);
+        //        // Calculate how far the mouse has moved
+        //        int deltaY = (int)(currentPosition.Y - _lastMousePosition.Y);
+        //        double offset = Math.Round(_startVerticalOffset - deltaY * 3.5);
 
-            if (_isDragging && !_isPageLoading && (timeNow - _lastScrollStart) > scrollUpdateInterval)
-            {
-                _lastScrollStart = timeNow;
-                skip = -1;
-                Point currentPosition = e.GetPosition(MainScroll);
+        //        MainScroll.ScrollToVerticalOffset(offset);
+        //    }
+        //    if (_isDragging)
+        //    {
+        //        _lastoffset = -1;
+        //        skip = skip + 1;
+        //    }
 
-                //if (_lastoffset != -1)
-                //{
-                //    _lastoffset = currentPosition.Y;
-                //}
-                //else if (_lastoffset == currentPosition.Y)
-                //{
-                //    return;
-                //}
-                //_lastoffset = currentPosition.Y;
-
-
-
-                // Calculate how far the mouse has moved
-                int deltaY = (int)(currentPosition.Y - _lastMousePosition.Y);
-                double offset = Math.Round(_startVerticalOffset - deltaY * 4);
-
-                //Debug.WriteLine("Move: " + offset + " . " + MainScroll.VerticalOffset);
-                //if (MainScroll.VerticalOffset != _lastoffset && _lastoffset != -1)
-                //{
-                //    return;
-                //}
-                //_lastoffset = offset;
-                //Debug.WriteLine(Math.Round(_startVerticalOffset - deltaY * 2.5));
-                //Debug.WriteLine(_lastMousePosition.Y);
-                // Update the scroll position. 
-                // We subtract the delta because "pulling" the mouse down 
-                // should move the scrollbar UP (scrolling towards the top).
-                //this.Dispatcher.Invoke(() =>
-                //{
-                MainScroll.ScrollToVerticalOffset(offset);
-
-                //}, DispatcherPriority.Send);
-
-                //MainScroll.ScrollToVerticalOffset(offset);
-
-
-                //e.Handled = false;
-                // Optional: If you want to use the "Push to turn page" logic while dragging,
-                // you would check the boundaries here. However, usually dragging 
-                // is best kept strictly for viewing the current page.
-            }
-            if (_isDragging)
-            {
-                _lastoffset = -1;
-                skip = skip + 1;
-            }
-
-
-        }
+        //}
 
         private void MainScroll_PreviewMouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
@@ -1911,7 +1902,7 @@ namespace ComicViewer
             {
                 _currentComicItem.LastOpened = DateTime.Now.Ticks;
             }
-            SaveJson(LoadJson());
+            SaveJson(LoadJson(), 3);
             try
             {
                 if (_mediaPlayer != null)
@@ -1936,7 +1927,7 @@ namespace ComicViewer
                 _archive?.Dispose();
                 FileSystem.DeleteFile(_currentFilePath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin);
                 JsonComic jsonComic = LoadJson();
-                jsonComic.List.Remove(_currentComicItem);
+                //jsonComic.List.Remove(_currentComicItem.Name.ToLower());
                 File.WriteAllText(jsonPath, JsonConvert.SerializeObject(jsonComic, Formatting.Indented));
 
                 Application.Current.Shutdown();
@@ -1990,14 +1981,14 @@ namespace ComicViewer
         {
             if ((int)ComicDisplay.ActualHeight <= (int)MainScroll.ActualHeight)
             {
-                System.Diagnostics.Debug.WriteLine("Window!");
+                Debug.WriteLine("Window!");
                 _isFitWidth = false;
                 //ScrollThresholdLimit = ScrollFast;
 
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("Width!");
+                Debug.WriteLine("Width!");
                 _isFitWidth = true;
                 //ScrollThresholdLimit = ScrollSlow;
 
@@ -2126,6 +2117,10 @@ namespace ComicViewer
             //Debug.WriteLine(e.OriginalSource);
             System.Windows.Point p = e.GetPosition(this);
 
+
+            long timeNow = DateTime.Now.Ticks / 10000;
+            //Debug.WriteLine((timeNow + " . " + _lastScrollStart));
+
             if (_MouseHidePos.X != p.X || _MouseHidePos.Y != p.Y)
             {
                 Cursor = Cursors.Hand;
@@ -2133,37 +2128,61 @@ namespace ComicViewer
                 _hideMouseCnt = 10;
                 _MouseHidePos = p;
             }
-            //System.Diagnostics.Debug.WriteLine("Mouse move: " + position.Y);
-            if (!titleBarLocked)
+
+            if (_isDragging)
             {
-                if (p.Y <= 30)
-                {
-                    TitleBar.Opacity = 0.6;
-                }
-                else
+                if (!_isPageLoading && (timeNow - _lastScrollStart) > scrollUpdateInterval)
                 {
 
-                    TitleBar.Opacity = 0;
-                }
-            }
+                    skip = -1;
+                    Point currentPosition = e.GetPosition(MainScroll);
+                    // Calculate how far the mouse has moved
+                    double deltaY = (currentPosition.Y - _lastMousePosition.Y);
 
-            double xPos = (this.Width - InfoPanel.Width) / 2;
-            if (p.Y <= (100 + InfoPanel.Height) && p.Y >= 100 &&
-                p.X >= xPos && p.X <= this.Width - xPos)
-            {
-                InfoPanel.Opacity = 0.6;
-                InfoPanel.Margin = new Thickness(0, 100, 0, 0);
-            }
-            else if (p.Y <= (this.Height - 100) && p.Y >= (this.Height - 100 - InfoPanel.Height) &&
-                p.X >= xPos && p.X <= this.Width - xPos)
-            {
-                InfoPanel.Opacity = 0.6;
-                InfoPanel.Margin = new Thickness(0, this.Height - 100 - InfoPanel.Height, 0, 0);
+                    double offset = (_startVerticalOffset - deltaY * 3);
+                    //Debug.WriteLine("Scroll: " + offset);
+                    MainScroll.ScrollToVerticalOffset(offset);
+                    _lastScrollStart = timeNow;
+                }
             }
             else
             {
-                InfoPanel.Opacity = 0;
+
+                //System.Diagnostics.Debug.WriteLine("Mouse move: " + position.Y);
+                if (!titleBarLocked)
+                {
+                    if (p.Y <= 30)
+                    {
+                        TitleBar.Opacity = 0.6;
+                    }
+                    else
+                    {
+
+                        TitleBar.Opacity = 0;
+                    }
+                }
+
+                double xPos = (this.Width - InfoPanel.Width) / 2;
+                if (p.Y <= (100 + InfoPanel.Height) && p.Y >= 100 &&
+                    p.X >= xPos && p.X <= this.Width - xPos)
+                {
+                    InfoPanel.Opacity = 0.6;
+                    InfoPanel.Margin = new Thickness(0, 100, 0, 0);
+                }
+                else if (p.Y <= (this.Height - 100) && p.Y >= (this.Height - 100 - InfoPanel.Height) &&
+                    p.X >= xPos && p.X <= this.Width - xPos)
+                {
+                    InfoPanel.Opacity = 0.6;
+                    InfoPanel.Margin = new Thickness(0, this.Height - 100 - InfoPanel.Height, 0, 0);
+                }
+                else
+                {
+                    InfoPanel.Opacity = 0;
+                }
             }
+
+
+
 
         }
 
@@ -2325,7 +2344,7 @@ namespace ComicViewer
         {
             JsonComic jsonComic = LoadJson();
 
-            List<ComicItem> list = jsonComic.List.OrderByDescending(item => item.LastOpened).Take(50).ToList();
+            List<ComicItem> list = sql.getRecentlyOpened();
 
             RecentlyOpenedMenu.Items.Clear();
 
@@ -2333,6 +2352,7 @@ namespace ComicViewer
             {
                 MenuItem menuItem = new MenuItem();
                 menuItem.MaxWidth = 500;
+                //Debug.WriteLine(item.LastOpened);
                 DateTime lastOpenedDate = new DateTime(item.LastOpened);
 
                 //String dateStr = lastOpenedDate.ToString("yy-MM-dd HH:mm");
@@ -2360,7 +2380,11 @@ namespace ComicViewer
                 {
                     if (File.Exists(path))
                     {
-                        LoadArchive(path);
+                        //LoadArchive(path);
+                        //String run = "explorer.exe /select, " + "\"" + _currentFilePath + "\"";
+
+                        OpenFile(path);
+
                     }
                     else
                     {
@@ -2372,6 +2396,15 @@ namespace ComicViewer
             }
 
 
+        }
+
+        private void OpenFile(string path)
+        {
+            ProcessStartInfo ProcessInfo = new ProcessStartInfo("\"" + System.Environment.ProcessPath + "\"", "\"" + path + "\"");
+            ProcessInfo.CreateNoWindow = true;
+            //Log.add("Open: " + path + ", " + System.Environment.ProcessPath, false);
+            Process.Start(ProcessInfo);
+            Exit();
         }
     }
 

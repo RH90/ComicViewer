@@ -58,6 +58,7 @@
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageReference Include="PhotoSauce.MagicScaler" Version="0.15.0" />
 		<PackageReference Include="SharpCompress" Version="0.47.0" />
+		<PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
 		<PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
 	</ItemGroup>
 

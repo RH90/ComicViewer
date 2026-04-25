@@ -13,7 +13,7 @@
         BorderBrush="black"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
-        MouseMove="mainWindow_MouseMove"
+        PreviewMouseMove="mainWindow_MouseMove"
         Title="Comic Viewer" Height="1057" Width="1500" Background="#1e1e1e">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" 
@@ -36,7 +36,7 @@
                       VerticalScrollBarVisibility="Visible" 
                       HorizontalScrollBarVisibility="Disabled"
                       PreviewMouseDown="MainScroll_PreviewMouseDown"
-                      PreviewMouseMove="MainScroll_PreviewMouseMove"
+                 
                       PreviewMouseUp="MainScroll_PreviewMouseUp"
                       >
                 <StackPanel x:Name="ComicStack" Background="Transparent"  

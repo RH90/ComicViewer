@@ -451,7 +451,7 @@ public static class MagicScalerImageFactory
 
         if (interpolation == InterpolationSettings.CatmullRom)
         {
-            settings.Interpolation = InterpolationSettings.Lanczos;
+            //settings.Interpolation = InterpolationSettings.Lanczos;
             //settings.UnsharpMask = new UnsharpMaskSettings(30, 1.5, 0x45);
         }
         else if (interpolation == InterpolationSettings.Lanczos)
