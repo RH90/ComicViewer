@@ -11,7 +11,7 @@ namespace ComicViewer.Objects
         private int windowX = 100;
         private double fixedImageWidth = 0.8;
         private double fixedImageRatio = 1.0;
-        private int scrollUpdateInterval = 30;
+        private int scrollUpdateInterval = 10;
         private string dbPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\" + "comics.db";
         //private Dictionary<String, ComicItem> list = new Dictionary<String, ComicItem>();
         //private int listCount = 0;

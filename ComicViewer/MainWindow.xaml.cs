@@ -29,6 +29,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using static ComicViewer.MainWindow;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using Image = NetVips.Image;
 using Path = System.IO.Path;
 
@@ -93,6 +94,9 @@ namespace ComicViewer
         private int _windowWidth = 0;
         private int _windowHeight = 0;
         private int _windowLeft = 0;
+        private bool _windowMaximized = false;
+        DispatcherTimer dispatcherTimer = new DispatcherTimer();
+
         public enum Scalers
         {
             None,
@@ -133,6 +137,7 @@ namespace ComicViewer
             ComicDisplay.Loaded += MainScroll_Loaded;
 
 
+            //dispatcherTimer.Interval = TimeSpan.FromMilliseconds(10);
             //var options = new string[]
             //{
             //    "--demux=avcodec","--input-repeat=65535"
@@ -177,6 +182,7 @@ namespace ComicViewer
             sql = new SQL(jsonComic.DbPath);
 
             UpdateJsonTask();
+            UpdateDragScroll();
             HideMouse();
             windowSizeChanged();
             SliderChange();
@@ -633,6 +639,7 @@ namespace ComicViewer
                                 _WebtoonStartPage = -1;
                                 WindowFit(_currentComicItem.FitToWindow, false, imageToShow.Width, imageToShow.Height);
                                 ComicDisplay.Source = imageToShow;
+                                //ComicDisplay.Source.Freeze();
                                 if (_currentPage + 1 <= _pages.Count - 1 && pageDiff > 0)
                                 {
                                     LoadAndProcessImage(_currentPage + 1, false);
@@ -694,9 +701,60 @@ namespace ComicViewer
                 _isPageLoading = false;
             }
         }
+        private void UpdateDragScroll()
+        {
+            JsonComic jsonComic = LoadJson();
+
+            Thread th1 = (new Thread(() =>
+            {
+
+                double lastVerticalOffset = -1;
+                while (true)
+                {
+                    try
+                    {
+                        if (_isDragging && !_isPageLoading)
+                        {
+                            MainScroll.Dispatcher.Invoke(new Action(() =>
+                            {
+                                Point p = MainScroll.PointToScreen(Mouse.GetPosition(MainScroll));
+                                double deltaY = (p.Y - _lastMousePosition.Y);
+
+                                double offset = (_startVerticalOffset - deltaY * 3);
+                                lastVerticalOffset = offset;
+                                if (offset != MainScroll.VerticalOffset)
+                                {
+                                    MainScroll.ScrollToVerticalOffset(offset);
+                                }
+                            }), DispatcherPriority.Send);
+
+                        }
+                        if (_windowMaximized)
+                        {
+                            Thread.Sleep((int)(jsonComic.ScrollUpdateInterval * 2));
+                        }
+                        else
+                        {
+                            Thread.Sleep(jsonComic.ScrollUpdateInterval);
+                        }
+
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.add(ex.Message, true);
+                        Log.add(ex.StackTrace, true);
+                    }
+                }
+
+            }));
+            th1.Start();
+        }
 
         private void UpdateJsonTask()
         {
+
+
+
             Thread th = (new Thread(() =>
              {
                  while (true)
@@ -1092,47 +1150,6 @@ namespace ComicViewer
                     stream.CopyTo(ms);
                     ms.Position = 0;
 
-                    //if (_pages[index].Key.ToLower().Contains(".jxl"))
-                    //{
-                    //    JxlDecodeOptions options = new JxlDecodeOptions
-                    //    {
-                    //        Threads = Environment.ProcessorCount,
-                    //        SkipOrientation = false,
-                    //    };
-
-                    //    var imageJxl = JxlDecoder.DecodeAsBitmapSource(ms.ToArray(), options);
-
-                    //    //image.Freeze();
-                    //    //imageJxl.Freeze();
-                    //    BitmapSource resized = ScaleImage(imageJxl, index, 0, 0);
-
-                    //    resized.Freeze();
-
-                    //    _cache.TryAdd(index, new ImageContainer(resized, (int)imageJxl.Width, (int)imageJxl.Height));
-                    //    imageToShow = resized;
-                    //}
-
-                    //else if (_pages[index].Key.ToLower().Contains(".jpg") || _pages[index].Key.ToLower().Contains(".jpeg"))
-                    //{
-                    //    TJDecompressor td = new TJDecompressor();
-                    //    DecompressedImage di = td.Decompress(ms.ToArray(), TJPixelFormats.TJPF_BGRA, TJFlags.ACCURATEDCT);
-                    //    int stride = (int)di.Width * 4;
-                    //    BitmapSource imageJpg = BitmapSource.Create(di.Width, di.Height, 96, 96, PixelFormats.Bgra32, null, di.Data, stride);
-
-                    //    BitmapSource resized = ScaleImage(imageJpg, index, 0, 0);
-                    //    //resized.Freeze();
-                    //    imageToShow = resized;
-                    //    _cache.TryAdd(index, new ImageContainer(resized, di.Width, di.Height));
-                    //    imageJpg = null;
-                    //    //Image vipsImage = Image.NewFromBuffer(ms.ToArray());
-                    //    //BitmapSource resized = ScaleImage(null, vipsImage, index, vipsImage.Width, vipsImage.Height);
-                    //    td.Dispose();
-                    //    di = null;
-                    //    //resized.Freeze();
-                    //    //_cache.TryAdd(index, new ImageContainer(resized, vipsImage.Width, vipsImage.Height));
-                    //    imageToShow = resized;
-
-                    //}
                     if (_pages[index].Key.ToLower().Contains(".png") ||
                     _pages[index].Key.ToLower().Contains(".jpg") ||
                     _pages[index].Key.ToLower().Contains(".jpeg") ||
@@ -1253,8 +1270,11 @@ namespace ComicViewer
                 }
                 else if (diffRatio >= 0.9)
                 {
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), Scalers.VipsLanczos3, newWidth, newHeight, 1);
-                    CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
+                    using (var img = GetVipsImg(index, ms))
+                    {
+                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, newWidth, newHeight, 1);
+                        CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
+                    }
                 }
                 //if (diffRatio >= 1.6)
                 //{
@@ -1268,13 +1288,21 @@ namespace ComicViewer
                 //}
                 else if (diffRatio >= 0.7)
                 {
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), Scalers.VipsLanczos3, newWidth, newHeight, 0);
-                    CheckScaling(ScalingLanczos3, isCurrentPage);
+                    using (var img = GetVipsImg(index, ms))
+                    {
+                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, newWidth, newHeight, 0);
+
+                        CheckScaling(ScalingLanczos3, isCurrentPage);
+                    }
+
                 }
                 else
                 {
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), Scalers.VipsLanczos2, newWidth, newHeight, 0);
-                    CheckScaling(ScalingLanczos2, isCurrentPage);
+                    using (var img = GetVipsImg(index, ms))
+                    {
+                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos2, newWidth, newHeight, 0);
+                        CheckScaling(ScalingLanczos2, isCurrentPage);
+                    }
                     //bs = VipsImageFactory.Scale(GetVipsImg(index, ms), (Enums.Kernel.Mitchell), newWidth, newHeight, 0);
                     //CheckScaling(ScalingMitchell, isCurrentPage);
                 }
@@ -1311,8 +1339,11 @@ namespace ComicViewer
                     {
                         sharpenLevel = 1;
                     }
+                    using (var img = GetVipsImg(index, ms))
+                    {
+                        bs = VipsImageFactory.Scale(img, scalingAlgo, newWidth, newHeight, sharpenLevel);
+                    }
 
-                    bs = VipsImageFactory.Scale(GetVipsImg(index, ms), scalingAlgo, newWidth, newHeight, sharpenLevel);
                     if (index == _currentPage)
                         _MagicScale = false;
                 }
@@ -1615,89 +1646,94 @@ namespace ComicViewer
         }
 
         // --- NAVIGATION & SCROLLING ---
+        int dispatchCnt = 0;
+        const double dTimer = 20;
+        const double dispatchMax = 100 / dTimer;
+
+        double dScroll = SystemParameters.PrimaryScreenHeight / (3 * dispatchMax);
+
+        private void dispatcherTimer_ScrollUP(object sender, EventArgs e)
+        {
+            if (dispatchCnt >= dispatchMax)
+            {
+                dispatcherTimer.Stop();
+                dispatchCnt = 0;
+            }
+
+            MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset - dScroll);
+            dispatchCnt++;
+        }
+        private void dispatcherTimer_ScrollDOWN(object sender, EventArgs e)
+        {
+            if (dispatchCnt >= dispatchMax)
+            {
+                dispatcherTimer.Stop();
+                dispatchCnt = 0;
+            }
+            MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset + dScroll);
+
+            dispatchCnt++;
+        }
 
         private void MainScroll_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
         {
-            //Debug.WriteLine(MainScroll.VerticalOffset + ", " + MainScroll.ScrollableHeight);
-
-
+            e.Handled = true;
             if (!_IsWebtoon)
             {
+
                 if (_isPageLoading)
                 {
                     lastScrollStart = DateTime.Now.Ticks;
-                    e.Handled = true;
+                    //e.Handled = true;
                     return;
                 }
 
                 if (scrollWait > DateTime.Now.Ticks / 10000)
                 {
                     //scrollWait = scrollWait - (DateTime.Now.Ticks - lastScrollStart) / 10000;
-                    e.Handled = true;
+                    //e.Handled = true;
                     return;
                 }
                 long scrollTime = DateTime.Now.Ticks;
-                //
-
 
                 MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset - e.Delta * 2);
                 bool isAtBottom = MainScroll.VerticalOffset >= MainScroll.ScrollableHeight;
                 bool isAtTop = MainScroll.VerticalOffset <= 0;
 
-                //System.Diagnostics.Debug.WriteLine("Scroll");
                 if (!_isFitWidth || !((scrollTime - lastScrollStart) / 10000 < 200 && (isAtBottom || isAtTop)))
                 {
                     if (e.Delta < 0)
                     {
                         if (isAtBottom)
                         {
-                            //_scrollAccumulator += Math.Abs(e.Delta); // Accumulate the "push"
-
-                            //if (_scrollAccumulator >= ScrollThresholdLimit)
-                            //{
                             if (_currentPage < _pages.Count - 1)
                             {
-                                //_scrollAccumulator = 0; // Reset for the next page
                                 _currentPage++;
                                 DisplayPage(1, 1);
                                 lastScrollStart = DateTime.Now.Ticks;
                             }
                             //}
-                            e.Handled = true; // Block the actual scroll movement while at edge
+                            //e.Handled = true; // Block the actual scroll movement while at edge
                         }
                         else
                         {
-                            // If they are scrolling down but NOT at the bottom, 
-                            // reset the accumulator so they don't have "pre-charged" flips.
-                            //_scrollAccumulator = 0;
+                            //smoothScroll(false);
                         }
                     }
-                    // SCROLLING UP (Delta > 0)
                     else if (e.Delta > 0)
                     {
                         if (isAtTop)
                         {
-                            //_scrollAccumulator += Math.Abs(e.Delta);
-
-                            //if (_scrollAccumulator >= ScrollThresholdLimit)
-                            //{
                             if (_currentPage > 0)
                             {
-                                //_scrollAccumulator = 0;
                                 _currentPage--;
                                 DisplayPage(-1, 6);
-                                lastScrollStart = DateTime.Now.Ticks;
-                                //// Force UI update to calculate new ScrollableHeight 
-                                //// before moving to the bottom of the previous page
-                                //MainScroll.UpdateLayout();
-                                ////MainScroll.ScrollToBottom();
                             }
-                            //}
-                            e.Handled = true;
+                            //e.Handled = true;
                         }
                         else
                         {
-                            //_scrollAccumulator = 0;
+                            //smoothScroll(true);
                         }
                     }
                 }
@@ -1705,12 +1741,21 @@ namespace ComicViewer
             }
             else
             {
+                //if (e.Delta < 0)
+                //{
+                //    smoothScroll(false);
+                //}
+                //else
+                //{
+                //    smoothScroll(true);
+                //}
+
                 MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset - e.Delta * 2);
                 double offset = MainScroll.ScrollableHeight - MainScroll.VerticalOffset;
                 Debug.WriteLine(offset + " . " + MainScroll.ActualHeight);
                 if (offset < (MainScroll.ActualHeight * 1.5) && !_isPageLoading)
                 {
-                    e.Handled = true;
+                    //e.Handled = true;
                     _currentPage++;
                     DisplayPage(0, 577);
                     UpdateInfo(null);
@@ -1721,6 +1766,23 @@ namespace ComicViewer
 
 
         }
+
+        private void smoothScroll(bool up)
+        {
+            if (dispatcherTimer.IsEnabled)
+            {
+                dispatcherTimer.Stop();
+            }
+            dispatchCnt = 0;
+            dispatcherTimer = new DispatcherTimer(DispatcherPriority.Send);
+            if (up)
+                dispatcherTimer.Tick += dispatcherTimer_ScrollUP;
+            else
+                dispatcherTimer.Tick += dispatcherTimer_ScrollDOWN;
+            dispatcherTimer.Interval = TimeSpan.FromMilliseconds(dTimer);
+            dispatcherTimer.Start();
+        }
+
         private void MainScroll_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             // Only drag if the left mouse button is pressed
@@ -1750,9 +1812,10 @@ namespace ComicViewer
             {
                 return;
             }
-
+            _windowMaximized = false;
             if (Application.Current.MainWindow.WindowState == WindowState.Maximized)
             {
+
                 BorderThickness = new Thickness(2, 0, 2, 0);
                 //Application.Current.MainWindow.WindowStyle = WindowStyle.SingleBorderWindow;
                 ResizeMode = ResizeMode.CanResize;
@@ -1762,6 +1825,7 @@ namespace ComicViewer
             }
             else if (Application.Current.MainWindow.WindowState == WindowState.Normal)
             {
+                _windowMaximized = true;
                 BorderThickness = new Thickness(7, 7, 7, 7);
                 //_inStateChange = true;
                 WindowState = WindowState.Normal;
@@ -1778,29 +1842,6 @@ namespace ComicViewer
         int skip = 10;
         double _lastoffset = -1;
         static long _lastScrollStart = DateTime.Now.Ticks / 10000;
-        //private void MainScroll_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-        //{
-        //    long timeNow = DateTime.Now.Ticks / 10000;
-        //    //Debug.WriteLine((timeNow + " . " + _lastScrollStart));
-
-        //    if (_isDragging && !_isPageLoading && (timeNow - _lastScrollStart) > scrollUpdateInterval)
-        //    {
-        //        _lastScrollStart = timeNow;
-        //        skip = -1;
-        //        Point currentPosition = e.GetPosition(MainScroll);
-        //        // Calculate how far the mouse has moved
-        //        int deltaY = (int)(currentPosition.Y - _lastMousePosition.Y);
-        //        double offset = Math.Round(_startVerticalOffset - deltaY * 3.5);
-
-        //        MainScroll.ScrollToVerticalOffset(offset);
-        //    }
-        //    if (_isDragging)
-        //    {
-        //        _lastoffset = -1;
-        //        skip = skip + 1;
-        //    }
-
-        //}
 
         private void MainScroll_PreviewMouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
@@ -2131,19 +2172,6 @@ namespace ComicViewer
 
             if (_isDragging)
             {
-                if (!_isPageLoading && (timeNow - _lastScrollStart) > scrollUpdateInterval)
-                {
-
-                    skip = -1;
-                    Point currentPosition = e.GetPosition(MainScroll);
-                    // Calculate how far the mouse has moved
-                    double deltaY = (currentPosition.Y - _lastMousePosition.Y);
-
-                    double offset = (_startVerticalOffset - deltaY * 3);
-                    //Debug.WriteLine("Scroll: " + offset);
-                    MainScroll.ScrollToVerticalOffset(offset);
-                    _lastScrollStart = timeNow;
-                }
             }
             else
             {
