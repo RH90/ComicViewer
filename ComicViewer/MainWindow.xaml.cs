@@ -54,7 +54,7 @@ namespace ComicViewer
         private System.Windows.Point _MouseHidePos;
         private double _startVerticalOffset;
         private bool _isDragging = false;
-        public static Scalers _scalingAlgo = Scalers.None;
+        public static Scalers _scalingAlgo = Scalers.Auto;
         private string size = "";
         private string jsonPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\" + "comic.json";
         private System.Windows.Point _lastTitlePos;
@@ -99,7 +99,7 @@ namespace ComicViewer
 
         public enum Scalers
         {
-            None,
+            Auto,
 
             VipsLanczos3Sharp,
             VipsLanczos3,
@@ -375,7 +375,7 @@ namespace ComicViewer
             _currentFile = Path.GetFileName(filePath);
             _currentFilePath = filePath;
             _currentPage = 0;
-            _scalingAlgo = Scalers.None;
+            _scalingAlgo = Scalers.Auto;
 
             JsonComic jsonComic = LoadJson();
 
@@ -1253,7 +1253,7 @@ namespace ComicViewer
                 newHeight = OHeight;
             }
 
-            if (scalingAlgo == Scalers.None)
+            if (scalingAlgo == Scalers.Auto)
             {
                 double diffRatio = (double)newWidth / (double)OWidth;
 
@@ -1268,7 +1268,7 @@ namespace ComicViewer
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                     CheckScaling(ScalingCatRom, isCurrentPage);
                 }
-                else if (diffRatio >= 0.9)
+                else if (diffRatio >= 0.85)
                 {
                     using (var img = GetVipsImg(index, ms))
                     {
@@ -2256,13 +2256,13 @@ namespace ComicViewer
 
             if (sender == ScalingLanczos3) _scalingAlgo = Scalers.VipsLanczos3;
             else if (sender == ScalingLanczos2) _scalingAlgo = Scalers.VipsLanczos2;
-            else if (sender == ScalingLinear) _scalingAlgo = Scalers.VipsLinear;
+            //else if (sender == ScalingLinear) _scalingAlgo = Scalers.VipsLinear;
             else if (sender == ScalingMitchell) _scalingAlgo = Scalers.VipsMitchell;
-            else if (sender == ScalingThumb) _scalingAlgo = Scalers.VipsThumb;
+            //else if (sender == ScalingThumb) _scalingAlgo = Scalers.VipsThumb;
             else if (sender == ScalingThumbL) _scalingAlgo = Scalers.VipsThumbL;
-            else if (sender == ScalingCubic) _scalingAlgo = Scalers.VipsCubic;
+            //else if (sender == ScalingCubic) _scalingAlgo = Scalers.VipsCubic;
             else if (sender == ScalingUltraSharp) _scalingAlgo = Scalers.MagicUltraSharp;
-            else if (sender == ScalingUltraSharpLinear) _scalingAlgo = Scalers.MagicUltraSharpLinear;
+            //else if (sender == ScalingUltraSharpLinear) _scalingAlgo = Scalers.MagicUltraSharpLinear;
             else if (sender == ScalingMitchellMS) _scalingAlgo = Scalers.MagicMitchell;
             else if (sender == ScalingHermite) _scalingAlgo = Scalers.MagicHermite;
             else if (sender == ScalingCatRom) _scalingAlgo = Scalers.MagicCatRom;
@@ -2271,6 +2271,7 @@ namespace ComicViewer
             else if (sender == ScalingAIMedium) _scalingAlgo = Scalers.AIMedium;
             else if (sender == ScalingAIHigh) _scalingAlgo = Scalers.AIHigh;
             else if (sender == ScalingLanczos3Sharp) _scalingAlgo = Scalers.VipsLanczos3Sharp;
+            else if (sender == ScalingAuto) _scalingAlgo = Scalers.Auto;
 
 
             Debug.WriteLine(_scalingAlgo);
