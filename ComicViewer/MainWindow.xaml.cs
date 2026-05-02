@@ -95,6 +95,8 @@ namespace ComicViewer
         private int _windowHeight = 0;
         private int _windowLeft = 0;
         private bool _windowMaximized = false;
+        private bool _isFocused = true;
+
         DispatcherTimer dispatcherTimer = new DispatcherTimer();
 
         public enum Scalers
@@ -208,6 +210,11 @@ namespace ComicViewer
                {
                    while (true)
                    {
+                       if (!_isFocused)
+                       {
+                           Thread.Sleep(200);
+                           continue;
+                       }
                        try
                        {
                            Thread.Sleep(100);
@@ -278,6 +285,11 @@ namespace ComicViewer
             {
                 while (true)
                 {
+                    if (!_isFocused)
+                    {
+                        Thread.Sleep(200);
+                        continue;
+                    }
                     try
                     {
                         if (!(_currentPage < 0 || _currentPage >= _pages.Count) && _mediaPlayer != null && _mediaPlayer.IsPlaying)
@@ -711,6 +723,11 @@ namespace ComicViewer
                 double lastVerticalOffset = -1;
                 while (true)
                 {
+                    if (!_isFocused)
+                    {
+                        Thread.Sleep(200);
+                        continue;
+                    }
                     try
                     {
                         if (_isDragging && !_isPageLoading)
@@ -932,6 +949,13 @@ namespace ComicViewer
                 {
                     while (true)
                     {
+                        if (!_isFocused)
+                        {
+                            Thread.Sleep(100);
+                            continue;
+                        }
+
+
                         image = OverlayBitmapFrames(image, frames[frameIndex], framesList[frameIndex].Item1, framesList[frameIndex].Item2, framesControl[frameIndex].Item2);
                         image.Freeze();
                         this.Dispatcher.Invoke(new Action(() =>
@@ -990,7 +1014,11 @@ namespace ComicViewer
                 {
                     while (true)
                     {
-
+                        if (!_isFocused)
+                        {
+                            Thread.Sleep(100);
+                            continue;
+                        }
 
                         image = frames[frameIndex].Bitmap;
                         image.Freeze(); // Freeze for cross-thread access
@@ -1272,7 +1300,7 @@ namespace ComicViewer
                 {
                     using (var img = GetVipsImg(index, ms))
                     {
-                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, newWidth, newHeight, 1);
+                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, 0, newWidth, newHeight, 1);
                         CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
                     }
                 }
@@ -1290,7 +1318,7 @@ namespace ComicViewer
                 {
                     using (var img = GetVipsImg(index, ms))
                     {
-                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, newWidth, newHeight, 0);
+                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, 0, newWidth, newHeight, 0);
 
                         CheckScaling(ScalingLanczos3, isCurrentPage);
                     }
@@ -1300,7 +1328,7 @@ namespace ComicViewer
                 {
                     using (var img = GetVipsImg(index, ms))
                     {
-                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos2, newWidth, newHeight, 0);
+                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos2, 0, newWidth, newHeight, 0);
                         CheckScaling(ScalingLanczos2, isCurrentPage);
                     }
                     //bs = VipsImageFactory.Scale(GetVipsImg(index, ms), (Enums.Kernel.Mitchell), newWidth, newHeight, 0);
@@ -1339,31 +1367,36 @@ namespace ComicViewer
                     {
                         sharpenLevel = 1;
                     }
+                    int aiScale = 0;
+                    if (OWidth < System.Windows.SystemParameters.PrimaryScreenWidth &&
+                    (scalingAlgo == Scalers.AINone ||
+                    scalingAlgo == Scalers.AILow ||
+                    scalingAlgo == Scalers.AIMedium ||
+                    scalingAlgo == Scalers.AIHigh))
+                    {
+                        double vScale = newWidth / OWidth;
+                        aiScale = 2;
+
+                        if (vScale > 2.7)
+                        {
+                            aiScale = 4;
+                        }
+                        OWidth = OWidth * aiScale;
+                        OHeight = OHeight * aiScale;
+                    }
+
+
+
+
                     using (var img = GetVipsImg(index, ms))
                     {
-                        bs = VipsImageFactory.Scale(img, scalingAlgo, newWidth, newHeight, sharpenLevel);
+                        bs = VipsImageFactory.Scale(img, scalingAlgo, aiScale, newWidth, newHeight, sharpenLevel);
                     }
 
                     if (index == _currentPage)
                         _MagicScale = false;
                 }
 
-            }
-            if (OWidth < System.Windows.SystemParameters.PrimaryScreenWidth &&
-                       (scalingAlgo == Scalers.AINone ||
-                       scalingAlgo == Scalers.AILow ||
-                       scalingAlgo == Scalers.AIMedium ||
-                       scalingAlgo == Scalers.AIHigh))
-            {
-                double vScale = newWidth / OWidth;
-                int AiScale = 2;
-
-                if (vScale > 2.7)
-                {
-                    AiScale = 4;
-                }
-                OWidth = OWidth * AiScale;
-                OHeight = OHeight * AiScale;
             }
 
 
@@ -2051,6 +2084,12 @@ namespace ComicViewer
 
                   while (true)
                   {
+                      if (!_isFocused)
+                      {
+                          Thread.Sleep(200);
+                          continue;
+                      }
+
                       try
                       {
                           Thread.Sleep(20);
@@ -2097,6 +2136,11 @@ namespace ComicViewer
                 while (true)
                     try
                     {
+                        if (!_isFocused)
+                        {
+                            Thread.Sleep(200);
+                            continue;
+                        }
                         Thread.Sleep(20);
                         if (_sliderChangeCnt > 0)
                         {
@@ -2434,6 +2478,15 @@ namespace ComicViewer
             //Log.add("Open: " + path + ", " + System.Environment.ProcessPath, false);
             Process.Start(ProcessInfo);
             Exit();
+        }
+        private void mainWindow_Activated(object sender, EventArgs e)
+        {
+            _isFocused = true;
+        }
+
+        private void mainWindow_Deactivated(object sender, EventArgs e)
+        {
+            _isFocused = false;
         }
     }
 

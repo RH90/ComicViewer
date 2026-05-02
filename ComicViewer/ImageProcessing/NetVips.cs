@@ -95,22 +95,38 @@ public static class VipsImageFactory
     ///   - Moderate downscale       → Mitchell  (balanced sharpness/ringing)
     ///   - Heavy downscale (≤50%)   → Linear    (fastest, avoids aliasing)
     /// </summary>
-    public static BitmapSource Scale(Image vipsImage, MainWindow.Scalers scalingAlgo, int targetWidth = 0, int targetHeight = 0, int sharpenLevel = 0)
+    public static BitmapSource Scale(Image vipsImage, MainWindow.Scalers scalingAlgo, int aiScale, int targetWidth = 0, int targetHeight = 0, int sharpenLevel = 0)
     {
-        Image temp = null;
+
         Image resized = null!;
         bool didResize = targetWidth > 0 || targetHeight > 0;
+        int outW = targetWidth > 0 ? targetWidth : vipsImage.Width;
+        int outH = targetHeight > 0 ? targetHeight : vipsImage.Height;
+
+        double hScale = (double)outW / vipsImage.Width;
+        double vScale = (double)outH / vipsImage.Height;
+        double minScale = Math.Min(hScale, vScale);
+        Image temp = vScale < 1 && aiScale == 0 ? vipsImage : ApplyIccProfile(vipsImage);
 
         try
         {
             //using Image temp = ToBgra(vipsImage);
-            temp = ApplyIccProfile(vipsImage);
-            int outW = targetWidth > 0 ? targetWidth : temp.Width;
-            int outH = targetHeight > 0 ? targetHeight : temp.Height;
 
-            double hScale = (double)outW / temp.Width;
-            double vScale = (double)outH / temp.Height;
-            double minScale = Math.Min(hScale, vScale);
+
+
+
+            //if (vScale > 1)
+            //{
+            //    temp = ApplyIccProfile(vipsImage);
+            //}
+            //else
+            //{
+            //    temp = (vipsImage);
+            //}
+
+
+
+
 
             didResize = (vScale != 0);
 
@@ -149,20 +165,10 @@ public static class VipsImageFactory
                 else
                 {
 
-                    if (temp.Width < System.Windows.SystemParameters.PrimaryScreenWidth &&
-                        (scalingAlgo == MainWindow.Scalers.AINone ||
-                        scalingAlgo == MainWindow.Scalers.AILow ||
-                        scalingAlgo == MainWindow.Scalers.AIMedium ||
-                        scalingAlgo == MainWindow.Scalers.AIHigh))
+                    if (aiScale > 0)
                     {
-                        int AiScale = 2;
-
-                        if (vScale > 2.7)
-                        {
-                            AiScale = 4;
-                        }
                         int newWidth = (int)Math.Round(temp.Width * vScale);
-                        Debug.WriteLine("AiScale:" + AiScale);
+                        Debug.WriteLine("AiScale:" + aiScale);
 
 
                         Waifu2xNative.Waifu2xNoiseLevel noiseLevel = Waifu2xNative.Waifu2xNoiseLevel.None;
@@ -181,7 +187,7 @@ public static class VipsImageFactory
                         using Image waifuIMG = Waifu2xNative.UpscalePng(temp,
                              Waifu2xNative.Waifu2xModel.AnimeStyleArt,
                              noiseLevel,
-                             AiScale);
+                             aiScale);
 
 
                         //Waifu2xNativeOld.Waifu2xNoiseLevel noiseLevel = Waifu2xNativeOld.Waifu2xNoiseLevel.None;
@@ -207,10 +213,10 @@ public static class VipsImageFactory
 
                         double newRatio = (double)newWidth / (double)width2;
 
-                        vScale = newRatio;
-                        hScale = newRatio;
+                        //vScale = newRatio;
+                        //hScale = newRatio;
 
-                        resized = waifuIMG.Resize(hScale, vscale: vScale, kernel: Enums.Kernel.Lanczos3);
+                        resized = waifuIMG.Resize(newRatio, vscale: newRatio, kernel: Enums.Kernel.Lanczos3);
                     }
                     else
                     {
@@ -244,6 +250,7 @@ public static class VipsImageFactory
                             {
                                 temp = temp.Flatten(background: new double[] { 255 });
                             }
+
 
                             if (temp.Interpretation == Interpretation.Multiband || temp.Interpretation == Interpretation.Rgb16)
                             {
@@ -316,35 +323,10 @@ public static class VipsImageFactory
 
             //using Image workImage = didResize ? resized : vipsImage;
 
-            //byte[] pixels = workImage.WriteToMemory<byte>();
-            //int stride = workImage.Width * workImage.Bands;
-
-            //PixelFormat pixelFormat = workImage.Bands switch
-            //{
-            //    1 => PixelFormats.Gray8,
-            //    3 => PixelFormats.Bgr24,
-            //    4 => PixelFormats.Bgra32,
-            //    _ => throw new NotSupportedException($"Unexpected band count: {bgra.Bands}")
-            //};
-
-            //var result = BitmapSource.Create(
-            //    workImage.Width, workImage.Height,
-            //    96, 96,
-            //    pixelFormat, null,
-            //    pixels, stride);
-            //result.Freeze();
-            //double[][] sepiaMatrix =
-            // [
-            //        [0.393, 0.769, 0.189],  // R_out
-            //        [0.349, 0.686, 0.168],  // G_out
-            //        [0.272, 0.534, 0.131]   // B_out
-            // ];
-
-            //resized = resized.Recomb(Image.NewFromArray(sepiaMatrix)).Cast(Enums.BandFormat.Uchar);
-
             using Image workImage = didResize ? resized : vipsImage;
+            //using Image bgra = ToBgraNoIcc(workImage);
 
-            using Image bgra = ToBgraNoIcc(workImage);
+            using Image bgra = vScale < 1 && aiScale == 0 ? ToBgraNoIcc(ApplyIccProfile(workImage)) : ToBgraNoIcc(workImage);
 
             byte[] pixels = bgra.WriteToMemory<byte>();
             int stride = bgra.Width * bgra.Bands;
