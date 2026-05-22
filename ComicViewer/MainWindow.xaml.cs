@@ -3,12 +3,10 @@
 using ComicViewer.Imaging;
 using ComicViewer.Objects;
 using LibVLCSharp.Shared;
-using MangaListWPF;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Gif;
 using Microsoft.VisualBasic.FileIO;
 using Microsoft.Win32;
-using NetVips;
 using Newtonsoft.Json;
 using PhotoSauce.MagicScaler;
 using SharpCompress.Archives;
@@ -26,10 +24,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using System.Windows.Threading;
-using static ComicViewer.MainWindow;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using Image = NetVips.Image;
 using Path = System.IO.Path;
 
@@ -912,6 +907,7 @@ namespace ComicViewer
                 ms,
                 BitmapCreateOptions.PreservePixelFormat,
                 BitmapCacheOption.OnLoad);
+
             var frames = decoder.Frames.ToList();
             int frameIndex = 0;
             BitmapFrame image = frames[0];
@@ -1296,6 +1292,14 @@ namespace ComicViewer
                     MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                     CheckScaling(ScalingCatRom, isCurrentPage);
                 }
+                else if (diffRatio >= 1.12)
+                {
+                    using (var img = GetVipsImg(index, ms))
+                    {
+                        bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, 0, newWidth, newHeight, 2);
+                        CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
+                    }
+                }
                 else if (diffRatio >= 0.85)
                 {
                     using (var img = GetVipsImg(index, ms))
@@ -1434,7 +1438,6 @@ namespace ComicViewer
             }
             else
             {
-
                 img = VipsImageFactory.FromBuffer(ms.ToArray());
             }
 

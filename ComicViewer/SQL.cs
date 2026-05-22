@@ -1,53 +1,31 @@
 ﻿using ComicViewer.Objects;
-using SharpCompress.Common;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Data;
 using System.Data.SQLite;
-using System.Drawing;
-
-//using System.Data.SQLite;
 using System.IO;
-using System.Windows.Documents;
-
-namespace MangaListWPF
+namespace ComicViewer
 {
     class SQL
     {
-
-        //private string dbfolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Desktop\Programming\db\manga.db";
         SQLiteConnection conMain;
         private string dbpathMain = "";
         public SQL(String dbpath)
         {
             dbpathMain = dbpath;
-
-            if (!File.Exists("dbLocation.txt"))
+            if (!File.Exists(dbpath))
             {
-
-
-                if (!File.Exists(dbpath))
-                {
-
-
-                    SQLiteConnection con1 = new SQLiteConnection("Data Source=" + dbpath + ";Version=3;New=True;");
-                    con1.Open();
-
-                    SQLiteCommand query = con1.CreateCommand();
-                    query.CommandText = "CREATE TABLE IF NOT EXISTS comics(" +
-                        "name TEXT PRIMARY KEY UNIQUE NOT NULL, " +
-                        "pos INTEGER DEFAULT 0, " +
-                        "FitToWindow INTEGER DEFAULT 0, " +
-                        "LastOpened INTEGER DEFAULT 0," +
-                        "Parent TEXT NOT NULL" +
-                        ")";
-                    query.ExecuteNonQuery();
-
-
-                    con1.Dispose();
-                }
-
+                SQLiteConnection con1 = new SQLiteConnection("Data Source=" + dbpath + ";Version=3;New=True;");
+                con1.Open();
+                SQLiteCommand query = con1.CreateCommand();
+                query.CommandText = "CREATE TABLE IF NOT EXISTS comics(" +
+                    "name TEXT PRIMARY KEY UNIQUE NOT NULL, " +
+                    "pos INTEGER DEFAULT 0, " +
+                    "FitToWindow INTEGER DEFAULT 0, " +
+                    "LastOpened INTEGER DEFAULT 0," +
+                    "Parent TEXT NOT NULL" +
+                    ")";
+                query.ExecuteNonQuery();
+                con1.Dispose();
             }
             conMain = new SQLiteConnection("Data Source=" + dbpathMain + ";Version=3;");
             conMain.Open();

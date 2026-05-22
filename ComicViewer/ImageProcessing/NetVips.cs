@@ -22,7 +22,12 @@ public static class VipsImageFactory
 
     /// <summary>Decodes JPEG, PNG, or WebP directly via libvips.</summary>
     public static Image FromBuffer(byte[] data)
-        => Image.NewFromBuffer(data, access: Enums.Access.Sequential);
+    {
+        //return Image.JpegloadBuffer(data);
+        return Image.NewFromBuffer(data);
+        //return Image.NewFromBuffer(data, access: Enums.Access.Sequential);
+    }
+    //=> 
 
     /// <summary>
     /// Decodes a JPEG XL file via the native wrapper and wraps the raw pixels
@@ -51,6 +56,7 @@ public static class VipsImageFactory
                 $"{width}×{height} (implies {(double)total / (width * height):F2} bands).");
 
         return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
+        //return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
     }
 
     /// <summary>
@@ -80,8 +86,12 @@ public static class VipsImageFactory
         }
 
         // WIC outputs BGRA; libvips expects RGB-ordered data → swap R↔B.
-        SwapRedBlue(rgba);
-        return RawToVips(rgba, width, height, hasAlpha: true);
+        //SwapRedBlue(rgba);
+        //return RawToVips(rgba, width, height, hasAlpha: true);
+
+        using Image bgra = RawToVips(rgba, width, height, hasAlpha: true);
+        Image reorder = ReorderBands(bgra, new[] { 2, 1, 0, 3 });
+        return reorder;
     }
 
     // -------------------------------------------------------------------------
@@ -106,6 +116,7 @@ public static class VipsImageFactory
         double hScale = (double)outW / vipsImage.Width;
         double vScale = (double)outH / vipsImage.Height;
         double minScale = Math.Min(hScale, vScale);
+
         Image temp = vScale < 1 && aiScale == 0 ? vipsImage : ApplyIccProfile(vipsImage);
 
         try
@@ -225,8 +236,18 @@ public static class VipsImageFactory
                         if (sharpenLevel > 0 && didResize && vScale != 1)
                         {
                             //Debug.WriteLine("Bands: " + temp.Interpretation
-                            double sigma = 1.5; // default 0.5, radius
-                            double m2 = 0.4; // default 3 , amount (3)
+                            double sigma = 1.0; // default 0.5, radius
+                            double m2 = 0.4;
+                            if (sharpenLevel == 1)
+                            {
+                                m2 = 0.3;
+                            }
+                            else if (sharpenLevel == 2)
+                            {
+                                m2 = 0.4;
+                            }
+
+                            // default 3 , amount (3)
                             double y2 = 3; // default 10 , maximum amount of brightening (2.5)
                             double x1 = 2; // default 2 threshold , higher = sharpen only stronger edges
 
@@ -246,7 +267,8 @@ public static class VipsImageFactory
 
                             Debug.WriteLine(temp.Interpretation);
                             Debug.WriteLine(temp.Bands);
-                            if (temp.Bands == 4)
+
+                            if (temp.HasAlpha())
                             {
                                 temp = temp.Flatten(background: new double[] { 255 });
                             }
@@ -323,7 +345,9 @@ public static class VipsImageFactory
 
             //using Image workImage = didResize ? resized : vipsImage;
 
+            //using Image workImage = didResize ? ReorderBands(resized, 2, 1, 0, 3) : ReorderBands(vipsImage, 2, 1, 0, 3);
             using Image workImage = didResize ? resized : vipsImage;
+
             //using Image bgra = ToBgraNoIcc(workImage);
 
             using Image bgra = vScale < 1 && aiScale == 0 ? ToBgraNoIcc(ApplyIccProfile(workImage)) : ToBgraNoIcc(workImage);
@@ -356,6 +380,8 @@ public static class VipsImageFactory
             resized?.Dispose();
             if (temp != null && temp != vipsImage)
                 temp.Dispose();
+
+            //System.GC.Collect();
         }
     }
 
@@ -414,7 +440,7 @@ public static class VipsImageFactory
     {
         bool didFlatten = img.Bands > 4;
         Image src = didFlatten ? img.Flatten() : img;
-
+        //MainWindow.Log.add("Bands: " + src.Bands, false);
         try
         {
             return src.Bands switch
@@ -443,6 +469,7 @@ public static class VipsImageFactory
         {
             // Check if the image has an embedded ICC profile.
             // get_typeof returns 0 if the field does not exist.
+            //MainWindow.Log.add("ICC profile type: " + img.GetTypeOf("icc-profile-data"), false);
             if (img.GetTypeOf("icc-profile-data") == 0)
             {
                 Debug.WriteLine("No embedded ICC profile found; skipping colour transform.");
