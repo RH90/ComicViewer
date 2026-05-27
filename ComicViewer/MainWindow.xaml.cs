@@ -2,7 +2,7 @@
 
 using ComicViewer.Imaging;
 using ComicViewer.Objects;
-using LibVLCSharp.Shared;
+//using LibVLCSharp.Shared;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Gif;
 using Microsoft.VisualBasic.FileIO;
@@ -56,11 +56,11 @@ namespace ComicViewer
         private static ConcurrentDictionary<int, ImageContainer> _cache = new ConcurrentDictionary<int, ImageContainer>();
         private bool _isFitWidth = false;
         private ComicItem _currentComicItem = null;
-        private LibVLC _libVLC;
-        private LibVLCSharp.Shared.MediaPlayer _mediaPlayer;
-        private MemoryStream _mediaStream;
-        private StreamMediaInput _mediaInput;
-        private Media _media;
+        //private LibVLC _libVLC;
+        //private LibVLCSharp.Shared.MediaPlayer _mediaPlayer;
+        //private MemoryStream _mediaStream;
+        //private StreamMediaInput _mediaInput;
+        //private Media _media;
         private SolidColorBrush mainBackground = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x1e, 0x1e, 0x1e, 0x1e));
         private GFG compare = new GFG();
         private Thread gifThread = null;
@@ -158,7 +158,7 @@ namespace ComicViewer
             }
             sw.Stop();
 
-            Log.add("Load json: " + sw.ElapsedMilliseconds + " ms", false);
+            //Log.add("Load json: " + sw.ElapsedMilliseconds + " ms", false);
 
             return jsonComic;
         }
@@ -241,12 +241,12 @@ namespace ComicViewer
             thHideMouse.Start();
         }
 
-        private void _mediaPlayer_MediaChanged(object sender, MediaPlayerMediaChangedEventArgs e)
-        {
-            _mediaPlayer.Play();
+        //private void _mediaPlayer_MediaChanged(object sender, MediaPlayerMediaChangedEventArgs e)
+        //{
+        //    _mediaPlayer.Play();
 
-            System.Diagnostics.Debug.WriteLine("Media Changed");
-        }
+        //    System.Diagnostics.Debug.WriteLine("Media Changed");
+        //}
 
         private void _mediaPlayer_EndReached(object sender, EventArgs e)
         {
@@ -260,75 +260,75 @@ namespace ComicViewer
             System.Diagnostics.Debug.WriteLine("Open Video");
         }
 
-        private void VideoView_Inititlize()
-        {
+        //private void VideoView_Inititlize()
+        //{
 
 
-            Core.Initialize();
-            _libVLC = new LibVLC(["--demux=avcodec", "--input-repeat=65535"]);
-            _mediaPlayer = new LibVLCSharp.Shared.MediaPlayer(_libVLC)
-            {
-                EnableMouseInput = true,
-            };
+        //    //Core.Initialize();
+        //    //_libVLC = new LibVLC(["--demux=avcodec", "--input-repeat=65535"]);
+        //    //_mediaPlayer = new LibVLCSharp.Shared.MediaPlayer(_libVLC)
+        //    //{
+        //    //    EnableMouseInput = true,
+        //    //};
 
-            videoView.MediaPlayer = _mediaPlayer;
-            _mediaPlayer.Opening += _mediaPlayer_Opening;
-            _mediaPlayer.EndReached += _mediaPlayer_EndReached;
-            _mediaPlayer.MediaChanged += _mediaPlayer_MediaChanged;
+        //    videoView.MediaPlayer = _mediaPlayer;
+        //    _mediaPlayer.Opening += _mediaPlayer_Opening;
+        //    _mediaPlayer.EndReached += _mediaPlayer_EndReached;
+        //    _mediaPlayer.MediaChanged += _mediaPlayer_MediaChanged;
 
-            Thread th = (new Thread(() =>
-            {
-                while (true)
-                {
-                    if (!_isFocused)
-                    {
-                        Thread.Sleep(200);
-                        continue;
-                    }
-                    try
-                    {
-                        if (!(_currentPage < 0 || _currentPage >= _pages.Count) && _mediaPlayer != null && _mediaPlayer.IsPlaying)
-                        {
-                            this.Dispatcher.Invoke(new Action(() =>
-                            {
-                                if (!(_currentPage < 0 || _currentPage >= _pages.Count) && _mediaPlayer != null && _mediaPlayer.IsPlaying)
-                                {
-                                    size = ToSize(_pages[_currentPage].Size, SizeUnits.MB) + " MB";
+        //    Thread th = (new Thread(() =>
+        //    {
+        //        while (true)
+        //        {
+        //            if (!_isFocused)
+        //            {
+        //                Thread.Sleep(200);
+        //                continue;
+        //            }
+        //            try
+        //            {
+        //                if (!(_currentPage < 0 || _currentPage >= _pages.Count) && _mediaPlayer != null && _mediaPlayer.IsPlaying)
+        //                {
+        //                    this.Dispatcher.Invoke(new Action(() =>
+        //                    {
+        //                        if (!(_currentPage < 0 || _currentPage >= _pages.Count) && _mediaPlayer != null && _mediaPlayer.IsPlaying)
+        //                        {
+        //                            size = ToSize(_pages[_currentPage].Size, SizeUnits.MB) + " MB";
 
-                                    TextSliderVideo.Text = _pages[_currentPage].Key + "\n" +
-                                    "Time: " + (_mediaPlayer.Time / 1000) + "s / " + (_mediaPlayer.Length / 1000) + "s" + "\n" +
-                                    size + "\n" + (_currentPage + 1) + "/" + _pages.Count;
-                                    if (_mediaPlayer.Length != 0)
-                                    {
-                                        mediaSlider.Value = ((double)_mediaPlayer.Time / (double)_mediaPlayer.Length) * 100;
-                                    }
-                                }
-                            }));
+        //                            TextSliderVideo.Text = _pages[_currentPage].Key + "\n" +
+        //                            "Time: " + (_mediaPlayer.Time / 1000) + "s / " + (_mediaPlayer.Length / 1000) + "s" + "\n" +
+        //                            size + "\n" + (_currentPage + 1) + "/" + _pages.Count;
+        //                            if (_mediaPlayer.Length != 0)
+        //                            {
+        //                                mediaSlider.Value = ((double)_mediaPlayer.Time / (double)_mediaPlayer.Length) * 100;
+        //                            }
+        //                        }
+        //                    }));
 
-                        }
-                        Thread.Sleep(200);
-                    }
-                    catch (Exception exception)
-                    {
-                        //System.Diagnostics.Debug.WriteLine(exception.Message);
-                        Log.add(exception.Message, true);
-                        Log.add(exception.StackTrace, true);
-                    }
-                }
+        //                }
+        //                Thread.Sleep(200);
+        //            }
+        //            catch (Exception exception)
+        //            {
+        //                //System.Diagnostics.Debug.WriteLine(exception.Message);
+        //                Log.add(exception.Message, true);
+        //                Log.add(exception.StackTrace, true);
+        //            }
+        //        }
 
-            }));
-            th.Start();
+        //    }));
+        //    th.Start();
 
-            if (videoView.IsLoaded)
-            {
-                _isVideoLoaded = true;
-            }
-            else
-            {
-                videoView.Loaded += VideoView_Loaded;
-            }
+        //    if (videoView.IsLoaded)
+        //    {
+        //        _isVideoLoaded = true;
+        //    }
+        //    else
+        //    {
+        //        videoView.Loaded += VideoView_Loaded;
+        //    }
 
-        }
+        //}
 
         private void VideoView_Loaded(object sender, RoutedEventArgs e)
         {
@@ -433,10 +433,11 @@ namespace ComicViewer
                     str.Contains(".jxl") ||
                     str.Contains(".jxr") ||
                     str.Contains(".tif") ||
-                    str.Contains(".gif") ||
-                    str.Contains(".webm") ||
-                    str.Contains(".mkv") ||
-                    str.Contains(".mp4")) &&
+                    str.Contains(".gif"))
+                    //str.Contains(".webm") ||
+                    //str.Contains(".mkv") ||
+                    //str.Contains(".mp4")) 
+                    &&
                     !(str.Contains("__macosx"))
                     )
                     {
@@ -525,170 +526,170 @@ namespace ComicViewer
                     _cache.TryRemove(key, out _);
                 }
 
-                if (_pages[_currentPage].Key.ToLower().Contains(".webm") ||
-                    _pages[_currentPage].Key.ToLower().Contains(".mp4") ||
-                    _pages[_currentPage].Key.ToLower().Contains(".mkv"))
+                //if (_pages[_currentPage].Key.ToLower().Contains(".webm") ||
+                //    _pages[_currentPage].Key.ToLower().Contains(".mp4") ||
+                //    _pages[_currentPage].Key.ToLower().Contains(".mkv"))
+                //{
+                //    mainWindow.Background = System.Windows.Media.Brushes.Black;
+                //    videoViewGrid.Visibility = Visibility.Visible;
+                //    videoView.Visibility = Visibility.Visible;
+                //    ComicDisplay.Source = null;
+
+                //    if (!_isVideoLoaded)
+                //    {
+
+                //        VideoView_Inititlize();
+                //        Thread thread = new Thread(() =>
+                //        {
+                //            while (!_isVideoLoaded)
+                //            {
+                //                Thread.Sleep(100);
+                //            }
+                //            StartNewVideo();
+                //        });
+                //        thread.Start();
+
+
+                //    }
+                //    else
+                //    {
+                //        StartNewVideo();
+                //    }
+
+                //}
+                //else
+                //{
+                mainWindow.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0x1e, 0x1e, 0x1e));
+                //videoViewGrid.Visibility = Visibility.Hidden;
+                //videoView.Visibility = Visibility.Hidden;
+                //if (_mediaPlayer != null)
+                //{
+                //    _mediaPlayer.Stop();
+                //}
+
+                BitmapSource imageToShow = null;
+                //RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.NearestNeighbor);
+                //RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.HighQuality);
+
+
+                bool isAnimated = false;
+                if (_pages[_currentPage].Key.ToLower().Contains(".webp"))
                 {
-                    mainWindow.Background = System.Windows.Media.Brushes.Black;
-                    videoViewGrid.Visibility = Visibility.Visible;
-                    videoView.Visibility = Visibility.Visible;
-                    ComicDisplay.Source = null;
-
-                    if (!_isVideoLoaded)
-                    {
-
-                        VideoView_Inititlize();
-                        Thread thread = new Thread(() =>
-                        {
-                            while (!_isVideoLoaded)
-                            {
-                                Thread.Sleep(100);
-                            }
-                            StartNewVideo();
-                        });
-                        thread.Start();
-
-
-                    }
-                    else
-                    {
-                        StartNewVideo();
-                    }
-
-                }
-                else
-                {
-                    mainWindow.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0x1e, 0x1e, 0x1e));
-                    videoViewGrid.Visibility = Visibility.Hidden;
-                    videoView.Visibility = Visibility.Hidden;
-                    if (_mediaPlayer != null)
-                    {
-                        _mediaPlayer.Stop();
-                    }
-
-                    BitmapSource imageToShow = null;
-                    //RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.NearestNeighbor);
-                    //RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.HighQuality);
-
-
-                    bool isAnimated = false;
-                    if (_pages[_currentPage].Key.ToLower().Contains(".webp"))
-                    {
-                        try
-                        {
-                            MemoryStream ms = new MemoryStream();
-                            _pages[_currentPage].OpenEntryStream().CopyTo(ms);
-                            ms.Position = 0;
-                            IEnumerable<MetadataExtractor.Directory> directories = ImageMetadataReader.ReadMetadata(ms);
-                            foreach (var directory in directories)
-                                foreach (var item in directory.Tags)
-                                {
-                                    if (item.Name.ToLower().Contains("animation") && item.Description.ToLower().Contains("true"))
-                                    {
-                                        isAnimated = true;
-                                    }
-                                }
-                        }
-                        catch
-                        {
-
-                        }
-
-                    }
-                    else if (_pages[_currentPage].Key.ToLower().Contains(".gif"))
+                    try
                     {
                         MemoryStream ms = new MemoryStream();
                         _pages[_currentPage].OpenEntryStream().CopyTo(ms);
                         ms.Position = 0;
-                        IEnumerable<MetadataExtractor.Directory> directories = GifMetadataReader.ReadMetadata(ms);
-                        var directoriesImage = directories.Where(dir => dir.Name.ToLower().Contains("image")).ToList();
+                        IEnumerable<MetadataExtractor.Directory> directories = ImageMetadataReader.ReadMetadata(ms);
+                        foreach (var directory in directories)
+                            foreach (var item in directory.Tags)
+                            {
+                                if (item.Name.ToLower().Contains("animation") && item.Description.ToLower().Contains("true"))
+                                {
+                                    isAnimated = true;
+                                }
+                            }
+                    }
+                    catch
+                    {
 
-                        if (directoriesImage.Count > 1)
-                        {
-                            isAnimated = true;
-                        }
+                    }
 
+                }
+                else if (_pages[_currentPage].Key.ToLower().Contains(".gif"))
+                {
+                    MemoryStream ms = new MemoryStream();
+                    _pages[_currentPage].OpenEntryStream().CopyTo(ms);
+                    ms.Position = 0;
+                    IEnumerable<MetadataExtractor.Directory> directories = GifMetadataReader.ReadMetadata(ms);
+                    var directoriesImage = directories.Where(dir => dir.Name.ToLower().Contains("image")).ToList();
 
-                        ms.Close();
+                    if (directoriesImage.Count > 1)
+                    {
+                        isAnimated = true;
                     }
 
 
+                    ms.Close();
+                }
 
 
-                    if (_pages[_currentPage].Key.ToLower().Contains(".gif") && isAnimated)
+
+
+                if (_pages[_currentPage].Key.ToLower().Contains(".gif") && isAnimated)
+                {
+                    StartGifAnimation(_pages[_currentPage].OpenEntryStream());
+
+                }
+                else if (_pages[_currentPage].Key.ToLower().Contains(".webp") && isAnimated)
+                {
+                    StartWebpAnimation(_pages[_currentPage].OpenEntryStream());
+                }
+                else
+                {
+
+
+                    if (_cache.TryGetValue(_currentPage, out ImageContainer cachedImage))
                     {
-                        StartGifAnimation(_pages[_currentPage].OpenEntryStream());
+                        imageToShow = cachedImage.ResizedImage;
 
-                    }
-                    else if (_pages[_currentPage].Key.ToLower().Contains(".webp") && isAnimated)
-                    {
-                        StartWebpAnimation(_pages[_currentPage].OpenEntryStream());
                     }
                     else
                     {
-
-
-                        if (_cache.TryGetValue(_currentPage, out ImageContainer cachedImage))
-                        {
-                            imageToShow = cachedImage.ResizedImage;
-
-                        }
-                        else
-                        {
-                            imageToShow = await LoadAndProcessImage(_currentPage, true);
-                            //System.Diagnostics.Debug.WriteLine("wwww " + _currentPage);
-                        }
-
-                        if (imageToShow != null)
-                        {
-                            if (!_IsWebtoon)
-                            {
-                                _WebtoonStartPage = -1;
-                                WindowFit(_currentComicItem.FitToWindow, false, imageToShow.Width, imageToShow.Height);
-                                ComicDisplay.Source = imageToShow;
-                                //ComicDisplay.Source.Freeze();
-                                if (_currentPage + 1 <= _pages.Count - 1 && pageDiff > 0)
-                                {
-                                    LoadAndProcessImage(_currentPage + 1, false);
-                                }
-                                if (_currentPage - 1 >= 0 && pageDiff < 0)
-                                {
-                                    LoadAndProcessImage(_currentPage - 1, false);
-                                }
-                            }
-                            else
-                            {
-                                WebtoonView(imageToShow);
-                            }
-
-                        }
+                        imageToShow = await LoadAndProcessImage(_currentPage, true);
+                        //System.Diagnostics.Debug.WriteLine("wwww " + _currentPage);
                     }
 
-                    UpdateInfo(imageToShow);
-
-                    if (!_IsWebtoon)
+                    if (imageToShow != null)
                     {
-
-
-                        if (pageDiff < 0)
+                        if (!_IsWebtoon)
                         {
-                            MainScroll.ScrollToBottom();
-                            if (_isFitWidth)
+                            _WebtoonStartPage = -1;
+                            WindowFit(_currentComicItem.FitToWindow, false, imageToShow.Width, imageToShow.Height);
+                            ComicDisplay.Source = imageToShow;
+                            //ComicDisplay.Source.Freeze();
+                            if (_currentPage + 1 <= _pages.Count - 1 && pageDiff > 0)
                             {
-                                scrollWait = 200 + DateTime.Now.Ticks / 10000;
+                                LoadAndProcessImage(_currentPage + 1, false);
+                            }
+                            if (_currentPage - 1 >= 0 && pageDiff < 0)
+                            {
+                                LoadAndProcessImage(_currentPage - 1, false);
                             }
                         }
                         else
                         {
-                            MainScroll.ScrollToTop();
-                            if (_isFitWidth)
-                            {
-                                scrollWait = 200 + DateTime.Now.Ticks / 10000;
-                            }
-
+                            WebtoonView(imageToShow);
                         }
+
                     }
                 }
+
+                UpdateInfo(imageToShow);
+
+                if (!_IsWebtoon)
+                {
+
+
+                    if (pageDiff < 0)
+                    {
+                        MainScroll.ScrollToBottom();
+                        if (_isFitWidth)
+                        {
+                            scrollWait = 200 + DateTime.Now.Ticks / 10000;
+                        }
+                    }
+                    else
+                    {
+                        MainScroll.ScrollToTop();
+                        if (_isFitWidth)
+                        {
+                            scrollWait = 200 + DateTime.Now.Ticks / 10000;
+                        }
+
+                    }
+                }
+                //}
 
                 Slider.Value = _currentPage;
 
@@ -839,16 +840,16 @@ namespace ComicViewer
             }
         }
 
-        private void StartNewVideo()
-        {
-            Stream stream = _pages[_currentPage].OpenEntryStream();
-            _mediaStream = new MemoryStream();
-            stream.CopyTo(_mediaStream);
-            _mediaStream.Position = 0;
-            _mediaInput = new StreamMediaInput(_mediaStream);
-            _media = new Media(_libVLC, _mediaInput);
-            _mediaPlayer.Media = _media;
-        }
+        //private void StartNewVideo()
+        //{
+        //    Stream stream = _pages[_currentPage].OpenEntryStream();
+        //    _mediaStream = new MemoryStream();
+        //    stream.CopyTo(_mediaStream);
+        //    _mediaStream.Position = 0;
+        //    _mediaInput = new StreamMediaInput(_mediaStream);
+        //    _media = new Media(_libVLC, _mediaInput);
+        //    _mediaPlayer.Media = _media;
+        //}
 
         public static List<(BitmapSource Bitmap, int Delay)> ExtractWebPFrames(Stream webpStream)
         {
@@ -1487,6 +1488,11 @@ namespace ComicViewer
         }
         private void SetFitWindow(object sender, RoutedEventArgs e)
         {
+            if (_currentComicItem == null)
+            {
+                return;
+            }
+
             _noScale = false;
             _fixedScale = false;
             _currentComicItem.FitToWindow = true;
@@ -1495,6 +1501,10 @@ namespace ComicViewer
 
         private void SetFitWidth(object sender, RoutedEventArgs e)
         {
+            if (_currentComicItem == null)
+            {
+                return;
+            }
             _noScale = false;
             _fixedScale = false;
             _currentComicItem.FitToWindow = false;
@@ -1502,12 +1512,20 @@ namespace ComicViewer
         }
         private void SetNoScale(object sender, RoutedEventArgs e)
         {
+            if (_currentComicItem == null)
+            {
+                return;
+            }
             _noScale = true;
             _fixedScale = false;
             WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
         }
         private void SetFixedScale(object sender, RoutedEventArgs e)
         {
+            if (_currentComicItem == null)
+            {
+                return;
+            }
             _fixedScale = true;
             _noScale = false;
             WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
@@ -1844,6 +1862,7 @@ namespace ComicViewer
         private void ChangeWindowState()
         {
 
+
             if (_IsWebtoon)
             {
                 return;
@@ -1872,6 +1891,11 @@ namespace ComicViewer
                 //Application.Current.MainWindow.ResizeMode = System.Windows.ResizeMode.NoResize;
                 //Application.Current.MainWindow.WindowState = WindowState.Maximized;
                 //Application.Current.MainWindow.WindowStyle = WindowStyle.None;
+            }
+
+            if (_currentComicItem == null)
+            {
+                return;
             }
             WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
         }
@@ -1980,19 +2004,19 @@ namespace ComicViewer
                 _currentComicItem.LastOpened = DateTime.Now.Ticks;
             }
             SaveJson(LoadJson(), 3);
-            try
-            {
-                if (_mediaPlayer != null)
-                {
-                    _mediaPlayer.Dispose();
-                    _mediaPlayer = null;
-                }
+            //try
+            //{
+            //    if (_mediaPlayer != null)
+            //    {
+            //        _mediaPlayer.Dispose();
+            //        _mediaPlayer = null;
+            //    }
 
-            }
-            catch
-            {
+            //}
+            //catch
+            //{
 
-            }
+            //}
             Environment.Exit(0);
         }
 
@@ -2023,21 +2047,21 @@ namespace ComicViewer
             }
 
         }
-        private void Forward_Click(object sender, RoutedEventArgs e)
-        {
-            if (_mediaPlayer.IsPlaying)
-            {
-                //System.Diagnostics.Debug.WriteLine("Forward! {}, {}", _mediaPlayer.Time, _mediaPlayer.Length);
-                _mediaPlayer.SeekTo(TimeSpan.FromMilliseconds(Math.Min((_mediaPlayer.Time + 2000), _mediaPlayer.Length)));
-            }
-        }
-        private void Backward_Click(object sender, RoutedEventArgs e)
-        {
-            if (_mediaPlayer.IsPlaying)
-            {
-                _mediaPlayer.SeekTo(TimeSpan.FromMilliseconds(Math.Max(_mediaPlayer.Time - 2000, 0)));
-            }
-        }
+        //private void Forward_Click(object sender, RoutedEventArgs e)
+        //{
+        //    if (_mediaPlayer.IsPlaying)
+        //    {
+        //        //System.Diagnostics.Debug.WriteLine("Forward! {}, {}", _mediaPlayer.Time, _mediaPlayer.Length);
+        //        _mediaPlayer.SeekTo(TimeSpan.FromMilliseconds(Math.Min((_mediaPlayer.Time + 2000), _mediaPlayer.Length)));
+        //    }
+        //}
+        //private void Backward_Click(object sender, RoutedEventArgs e)
+        //{
+        //    if (_mediaPlayer.IsPlaying)
+        //    {
+        //        _mediaPlayer.SeekTo(TimeSpan.FromMilliseconds(Math.Max(_mediaPlayer.Time - 2000, 0)));
+        //    }
+        //}
 
         private void videoView_GotFocus(object sender, RoutedEventArgs e)
         {
@@ -2332,6 +2356,10 @@ namespace ComicViewer
 
         private void MenuWebtoon_Click(object sender, RoutedEventArgs e)
         {
+            if (_currentComicItem == null)
+            {
+                return;
+            }
             _currentComicItem.FitToWindow = false;
             WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
 
@@ -2346,6 +2374,10 @@ namespace ComicViewer
 
         private void MenuWebtoonMargin_Click(object sender, RoutedEventArgs e)
         {
+            if (_currentComicItem == null)
+            {
+                return;
+            }
             _currentComicItem.FitToWindow = false;
             WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
 
@@ -2358,7 +2390,10 @@ namespace ComicViewer
 
         private void MenuWebtoonRestore_Click(object sender, RoutedEventArgs e)
         {
-
+            if (_currentComicItem == null)
+            {
+                return;
+            }
 
             _IsWebtoon = false;
             _WebtoonStartPage = -1;

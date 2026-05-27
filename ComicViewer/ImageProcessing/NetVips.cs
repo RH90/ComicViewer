@@ -55,6 +55,8 @@ public static class VipsImageFactory
                 $"JXL decode produced an unexpected buffer size: {total} bytes for " +
                 $"{width}×{height} (implies {(double)total / (width * height):F2} bands).");
 
+        //return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar).Copy(
+        //    width: width, height: height, interpretation: Enums.Interpretation.Srgb);
         return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
         //return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
     }
@@ -236,15 +238,15 @@ public static class VipsImageFactory
                         if (sharpenLevel > 0 && didResize && vScale != 1)
                         {
                             //Debug.WriteLine("Bands: " + temp.Interpretation
-                            double sigma = 1.0; // default 0.5, radius
-                            double m2 = 0.4;
+                            double sigma = 1; // default 0.5, radius
+                            double m2 = 0.35;
                             if (sharpenLevel == 1)
                             {
-                                m2 = 0.3;
+                                m2 = 0.28;
                             }
                             else if (sharpenLevel == 2)
                             {
-                                m2 = 0.4;
+                                m2 = 0.35;
                             }
 
                             // default 3 , amount (3)
@@ -263,17 +265,24 @@ public static class VipsImageFactory
                             //double m1 = 0; // default 0 
                             //double y3 = 20; // default 20
                             //MainWindow.Log.add("Bands: " + temp.Interpretation, false);
+                            //MainWindow.Log.add("Bands1: " + temp.Bands + ", " + temp.HasAlpha(), false);
                             kernel = Enums.Kernel.Lanczos2;
 
                             Debug.WriteLine(temp.Interpretation);
                             Debug.WriteLine(temp.Bands);
 
-                            if (temp.HasAlpha())
+
+                            if ((temp.Bands == 4 || temp.HasAlpha()) && temp.Interpretation != Interpretation.Cmyk)
                             {
-                                temp = temp.Flatten(background: new double[] { 255 });
+                                temp = temp.Flatten(background: new double[] { 0 });
                             }
 
+                            //Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
+                            //using Image alpha = img1.ExtractBand(img1.Bands - 1);
+                            //img1 = img1.ExtractBand(0, 3);
+                            //resized = img1.Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2).Bandjoin(alpha).Cast(Enums.BandFormat.Uchar);
 
+                            //MainWindow.Log.add("Bands2: " + temp.Bands + ", " + temp.HasAlpha() + ", " + temp.Interpretation + ", " + temp.Bands, false);
                             if (temp.Interpretation == Interpretation.Multiband || temp.Interpretation == Interpretation.Rgb16)
                             {
                                 using Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
@@ -285,6 +294,11 @@ public static class VipsImageFactory
                             {
                                 using Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
                                 resized = img1.Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
+
+                                //Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
+                                //using Image alpha = img1.ExtractBand(img1.Bands - 1);
+                                //img1 = img1.ExtractBand(0, 3);
+                                //resized = img1.Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2).Bandjoin(alpha).Cast(Enums.BandFormat.Uchar);
                             }
                         }
                         else
