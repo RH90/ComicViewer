@@ -47,6 +47,14 @@ public static class ImageDimensionReader
             && magic[8] == 0x57 && magic[9] == 0x45 && magic[10] == 0x42 && magic[11] == 0x50) // "WEBP"
             return ReadWebP(stream);
 
+        // ── AVIF: ????ftyp avif / ????ftyp avis ──────────────────────────────
+        // bytes 4-7 = 'ftyp' (0x66747970); bytes 8-11 = major brand 'avif' or 'avis'
+        if (n >= 12
+            && magic[4] == 0x66 && magic[5] == 0x74 && magic[6] == 0x79 && magic[7] == 0x70  // 'ftyp'
+            && magic[8] == 0x61 && magic[9] == 0x76 && magic[10] == 0x69                      // 'av?'
+            && (magic[11] == 0x66 || magic[11] == 0x73))                                       // 'avif' or 'avis'
+            return ReadAvif(stream);
+
         // ── JXL bare codestream: FF 0A ───────────────────────────────────────
         if (magic[0] == 0xFF && magic[1] == 0x0A)
             return ReadJxlContainer(stream);
@@ -163,6 +171,100 @@ public static class ImageDimensionReader
         }
 
         throw new InvalidDataException("JPEG: no SOF marker found.");
+    }
+    // =========================================================================
+    // AVIF (AV1 Image File Format)
+    //
+    // ISOBMFF container. Detection: bytes 4-7 = 'ftyp', major brand = 'avif'/'avis'.
+    //
+    // Dimension path (all big-endian):
+    //   top-level → meta [FullBox] → iprp → ipco → ispe [FullBox]
+    //
+    //   ispe (Image Spatial Extents):
+    //     [4 B size][4 B 'ispe'][1 B version][3 B flags]
+    //     [4 B image_width BE][4 B image_height BE]
+    //
+    // meta is a FullBox: 4 extra bytes (version + flags) before its children.
+    // iprp and ipco are plain container boxes: children start right after the 8-byte header.
+    // =========================================================================
+    private static (int, int) ReadAvif(MemoryStream s)
+    {
+        long fileLen = s.Length;
+
+        long metaPos = AvifFindBox(s, 0, fileLen, 0x6D657461u /* 'meta' */);
+        if (metaPos < 0) throw new InvalidDataException("AVIF: 'meta' box not found.");
+        long metaEnd = AvifBoxEnd(s, metaPos, fileLen);
+        long metaData = metaPos + 8 + 4; // box header(8) + FullBox version+flags(4)
+
+        long iprpPos = AvifFindBox(s, metaData, metaEnd, 0x69707270u /* 'iprp' */);
+        if (iprpPos < 0) throw new InvalidDataException("AVIF: 'iprp' box not found.");
+        long iprpEnd = AvifBoxEnd(s, iprpPos, metaEnd);
+        long iprpData = iprpPos + 8; // plain container box
+
+        long ipcoPos = AvifFindBox(s, iprpData, iprpEnd, 0x6970636Fu /* 'ipco' */);
+        if (ipcoPos < 0) throw new InvalidDataException("AVIF: 'ipco' box not found.");
+        long ipcoEnd = AvifBoxEnd(s, ipcoPos, iprpEnd);
+        long ipcoData = ipcoPos + 8; // plain container box
+
+        // The first 'ispe' in ipco describes the primary image canvas.
+        long ispePos = AvifFindBox(s, ipcoData, ipcoEnd, 0x69737065u /* 'ispe' */);
+        if (ispePos < 0) throw new InvalidDataException("AVIF: 'ispe' box not found.");
+
+        // Skip box header(8) + FullBox version+flags(4) = 12 bytes total.
+        s.Seek(ispePos + 12, SeekOrigin.Begin);
+        Span<byte> buf = stackalloc byte[4];
+        ReadExact(s, buf);
+        int w = (int)BinaryPrimitives.ReadUInt32BigEndian(buf);
+        ReadExact(s, buf);
+        int h = (int)BinaryPrimitives.ReadUInt32BigEndian(buf);
+        return (w, h);
+    }
+
+    /// <summary>
+    /// Walk ISOBMFF boxes in [<paramref name="start"/>, <paramref name="rangeEnd"/>)
+    /// and return the stream offset of the first box whose type matches
+    /// <paramref name="targetType"/>, or -1 if not found.
+    /// </summary>
+    private static long AvifFindBox(MemoryStream s, long start, long rangeEnd, uint targetType)
+    {
+        Span<byte> hdr = stackalloc byte[8];
+        long pos = start;
+        while (pos + 8 <= rangeEnd)
+        {
+            s.Seek(pos, SeekOrigin.Begin);
+            ReadExact(s, hdr);
+            uint size = BinaryPrimitives.ReadUInt32BigEndian(hdr);
+            uint type = BinaryPrimitives.ReadUInt32BigEndian(hdr[4..]);
+            long boxEnd = AvifCalcEnd(s, pos, size, rangeEnd);
+
+            if (type == targetType) return pos;
+            if (boxEnd <= pos) break; // guard against malformed data
+            pos = boxEnd;
+        }
+        return -1;
+    }
+
+    /// <summary>Returns the end offset of the ISOBMFF box whose header starts at <paramref name="boxPos"/>.</summary>
+    private static long AvifBoxEnd(MemoryStream s, long boxPos, long rangeEnd)
+    {
+        s.Seek(boxPos, SeekOrigin.Begin);
+        Span<byte> hdr = stackalloc byte[8];
+        ReadExact(s, hdr);
+        uint size = BinaryPrimitives.ReadUInt32BigEndian(hdr);
+        return AvifCalcEnd(s, boxPos, size, rangeEnd);
+    }
+
+    // Resolves the three ISOBMFF size encodings to an absolute end offset.
+    private static long AvifCalcEnd(MemoryStream s, long boxPos, uint size, long rangeEnd)
+    {
+        if (size == 0) return rangeEnd;  // box extends to end of its parent range
+        if (size == 1)                   // 64-bit extended size in the next 8 bytes
+        {
+            Span<byte> ext = stackalloc byte[8];
+            ReadExact(s, ext);
+            return boxPos + (long)BinaryPrimitives.ReadUInt64BigEndian(ext);
+        }
+        return boxPos + size;
     }
 
     // =========================================================================

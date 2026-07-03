@@ -66,7 +66,8 @@ namespace ComicViewer
         public void add(ComicItem comicItem)
         {
 
-            string sql = "INSERT OR REPLACE INTO comics(name,pos,FitToWindow,LastOpened,Parent) VALUES(@name,@pos,@FitToWindow,@LastOpened,@Parent)";
+            string sql = "INSERT OR REPLACE INTO comics(name,pos,FitToWindow,LastOpened,Parent) VALUES(@name,@pos,@FitToWindow,@LastOpened,@Parent)" +
+                " ON CONFLICT(name) DO UPDATE SET pos=excluded.pos, FitToWindow=excluded.FitToWindow, LastOpened=excluded.LastOpened, Parent=excluded.Parent;";
             SQLiteCommand query = new SQLiteCommand(sql, conMain);
             query.Parameters.AddWithValue("name", comicItem.Name);
             query.Parameters.AddWithValue("pos", comicItem.Pos);

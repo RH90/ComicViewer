@@ -16,6 +16,9 @@ namespace ComicViewer;
 
 public static class VipsImageFactory
 {
+    public static long imageLoad = 0;
+    public static long imageResize = 0;
+
     // -------------------------------------------------------------------------
     // Format loaders
     // -------------------------------------------------------------------------
@@ -24,7 +27,14 @@ public static class VipsImageFactory
     public static Image FromBuffer(byte[] data)
     {
         //return Image.JpegloadBuffer(data);
-        return Image.NewFromBuffer(data);
+        Stopwatch sw = Stopwatch.StartNew();
+
+        Image image = Image.NewFromBuffer(data);
+        sw.Stop();
+
+        imageLoad = sw.ElapsedMilliseconds;
+
+        return image;
         //return Image.NewFromBuffer(data, access: Enums.Access.Sequential);
     }
     //=> 
@@ -36,6 +46,8 @@ public static class VipsImageFactory
     /// </summary>
     public static Image FromJxl(byte[] data)
     {
+        Stopwatch sw = Stopwatch.StartNew();
+
         var (pixels, w, h, _) = JxlDecoder.DecodeInternalRaw(data, new JxlDecodeOptions { Threads = Environment.ProcessorCount });
 
         int width = (int)w;
@@ -57,7 +69,13 @@ public static class VipsImageFactory
 
         //return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar).Copy(
         //    width: width, height: height, interpretation: Enums.Interpretation.Srgb);
-        return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
+
+        Image image = Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
+
+        sw.Stop();
+        imageLoad = sw.ElapsedMilliseconds;
+
+        return image;
         //return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
     }
 
@@ -68,15 +86,22 @@ public static class VipsImageFactory
     /// </summary>
     public static Image FromJxr(byte[] data)
     {
+        Stopwatch sw = Stopwatch.StartNew();
+
         int width, height;
         byte[] rgba;
 
-        using (var stream = new MemoryStream(data, writable: false))
+        using (var stream = new MemoryStream(data))
         {
-            var decoder = BitmapDecoder.Create(stream,
-                               BitmapCreateOptions.PreservePixelFormat,
-                               BitmapCacheOption.OnDemand);
+            WmpBitmapDecoder decoder = new WmpBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnDemand);
+
+
+            //var decoder = BitmapDecoder.Create(stream,
+            //                   BitmapCreateOptions.PreservePixelFormat,
+            //                   BitmapCacheOption.OnDemand);
             var frame = decoder.Frames[0];
+
+
             var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
 
             width = converted.PixelWidth;
@@ -93,6 +118,9 @@ public static class VipsImageFactory
 
         using Image bgra = RawToVips(rgba, width, height, hasAlpha: true);
         Image reorder = ReorderBands(bgra, new[] { 2, 1, 0, 3 });
+
+        sw.Stop();
+        imageLoad = sw.ElapsedMilliseconds;
         return reorder;
     }
 
@@ -118,6 +146,8 @@ public static class VipsImageFactory
         double hScale = (double)outW / vipsImage.Width;
         double vScale = (double)outH / vipsImage.Height;
         double minScale = Math.Min(hScale, vScale);
+
+        Stopwatch sw = Stopwatch.StartNew();
 
         Image temp = vScale < 1 && aiScale == 0 ? vipsImage : ApplyIccProfile(vipsImage);
 
@@ -314,7 +344,9 @@ public static class VipsImageFactory
                             }
                             else
                             {
+                                //resized = temp;
                                 resized = temp.Resize(hScale, vscale: vScale, kernel: kernel);
+                                //resized = temp.Resize(hScale, vscale: vScale, kernel: Enums.Kernel.Nearest, gap: 999999);
                             }
 
                         }
@@ -357,14 +389,20 @@ public static class VipsImageFactory
 
             }
 
+
             //using Image workImage = didResize ? resized : vipsImage;
 
             //using Image workImage = didResize ? ReorderBands(resized, 2, 1, 0, 3) : ReorderBands(vipsImage, 2, 1, 0, 3);
             using Image workImage = didResize ? resized : vipsImage;
 
+
+
             //using Image bgra = ToBgraNoIcc(workImage);
 
+            //using Image bgra = vScale < 1 && aiScale == 0 ? ToBgraNoIcc(ApplyIccProfile(workImage)) : ToBgraNoIcc(workImage);
             using Image bgra = vScale < 1 && aiScale == 0 ? ToBgraNoIcc(ApplyIccProfile(workImage)) : ToBgraNoIcc(workImage);
+
+
 
             byte[] pixels = bgra.WriteToMemory<byte>();
             int stride = bgra.Width * bgra.Bands;
@@ -383,6 +421,9 @@ public static class VipsImageFactory
                 pixelFormat, null,
                 pixels, stride);
             result.Freeze();
+
+            sw.Stop();
+            imageResize = sw.ElapsedMilliseconds;
 
             return result;
         }

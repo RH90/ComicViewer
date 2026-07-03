@@ -114,8 +114,8 @@ public static class Waifu2xNative
 
         // Restore the original interpretation
         outImage = outImage.Copy(interpretation: image.Interpretation);
-        image.Close();
-        prepared.Close();
+        image.Dispose();
+        prepared.Dispose();
 
         return outImage;
     }

@@ -91,6 +91,8 @@ namespace ComicViewer
         private int _windowLeft = 0;
         private bool _windowMaximized = false;
         private bool _isFocused = true;
+        private bool _isUpPressed = false;
+        private bool _isDownPressed = false;
 
         DispatcherTimer dispatcherTimer = new DispatcherTimer();
 
@@ -180,6 +182,7 @@ namespace ComicViewer
 
             UpdateJsonTask();
             UpdateDragScroll();
+            UpdateKeyScroll();
             HideMouse();
             windowSizeChanged();
             SliderChange();
@@ -193,6 +196,11 @@ namespace ComicViewer
                     argLower.Contains(".rar") ||
                     argLower.Contains(".7z"))
                 {
+
+                    if ((i + 1) < args.Length && args[i + 1].ToLower().Contains("fixed"))
+                    {
+                        _fixedScale = true;
+                    }
                     System.Diagnostics.Debug.WriteLine("Open zip: " + args[i]);
                     LoadArchive(args[i]);
                     break;
@@ -433,6 +441,7 @@ namespace ComicViewer
                     str.Contains(".jxl") ||
                     str.Contains(".jxr") ||
                     str.Contains(".tif") ||
+                    str.Contains(".avif") ||
                     str.Contains(".gif"))
                     //str.Contains(".webm") ||
                     //str.Contains(".mkv") ||
@@ -763,6 +772,53 @@ namespace ComicViewer
             th1.Start();
         }
 
+        private void UpdateKeyScroll()
+        {
+            Thread th1 = (new Thread(() =>
+            {
+
+                while (true)
+                {
+                    if (!_isFocused)
+                    {
+                        Thread.Sleep(200);
+                        continue;
+                    }
+                    try
+                    {
+                        if (_isUpPressed)
+                        {
+                            MainScroll.Dispatcher.Invoke(new Action(() =>
+                            {
+                                double offset = (MainScroll.VerticalOffset - (SystemParameters.PrimaryScreenHeight / 30));
+                                MainScroll.ScrollToVerticalOffset(offset);
+                            }), DispatcherPriority.Send);
+                            Thread.Sleep(4);
+                            continue;
+                        }
+                        else if (_isDownPressed)
+                        {
+                            MainScroll.Dispatcher.Invoke(new Action(() =>
+                            {
+                                double offset = (MainScroll.VerticalOffset + (SystemParameters.PrimaryScreenHeight / 30));
+                                MainScroll.ScrollToVerticalOffset(offset);
+                            }), DispatcherPriority.Send);
+                            Thread.Sleep(4);
+                            continue;
+                        }
+                    }
+
+                    catch (Exception ex)
+                    {
+                        Log.add(ex.Message, true);
+                        Log.add(ex.StackTrace, true);
+                    }
+                    Thread.Sleep(20);
+                }
+
+            }));
+            th1.Start();
+        }
         private void UpdateJsonTask()
         {
 
@@ -1108,7 +1164,7 @@ namespace ComicViewer
                 dimensionStr += String.Format(" (View: {0}x{1})", MainScroll.ViewportWidth, MainScroll.ViewportHeight);
                 //    " (View: " + MainScroll.ViewportWidth + "x" + MainScroll.ViewportHeight + ")";
 
-                size = String.Format("{0} MB, Load: {1} ms", ToSize(_pages[_currentPage].Size, SizeUnits.MB), _loadTimeMs);
+                size = String.Format("{0} MB, Load: {1} ms, Read: {2} ms, Resize: {3} ms", ToSize(_pages[_currentPage].Size, SizeUnits.MB), _loadTimeMs, VipsImageFactory.imageLoad, VipsImageFactory.imageResize);
 
                 string strResized = currentImage.ResizedImage != null ? "Resized" : "Original";
                 string cachedStr = "";
@@ -1181,7 +1237,8 @@ namespace ComicViewer
                     _pages[index].Key.ToLower().Contains(".jxr") ||
                     _pages[index].Key.ToLower().Contains(".jxl") ||
                     _pages[index].Key.ToLower().Contains(".webp") ||
-                    _pages[index].Key.ToLower().Contains(".gif")
+                    _pages[index].Key.ToLower().Contains(".gif") ||
+                    _pages[index].Key.ToLower().Contains(".avif")
                    )
                     {
                         BitmapSource bs;
@@ -1457,17 +1514,9 @@ namespace ComicViewer
             {
                 fmt = MagicImageFormat.Jxr;
             }
-            else if (_pages[index].Key.ToLower().Contains(".png"))
+            else
             {
                 fmt = MagicImageFormat.Png;
-            }
-            else if (_pages[index].Key.ToLower().Contains(".jpeg"))
-            {
-                fmt = MagicImageFormat.Jpeg;
-            }
-            else if (_pages[index].Key.ToLower().Contains(".webp"))
-            {
-                fmt = MagicImageFormat.WebP;
             }
 
             //Debug.WriteLine("mmmm: " + _isFitWidth);
@@ -1928,6 +1977,8 @@ namespace ComicViewer
 
         private void Window_PreviewKeyUp(object sender, KeyEventArgs e)
         {
+            _isUpPressed = false;
+            _isDownPressed = false;
             if (e.Key.Equals(Key.Left))
             {
                 if (_currentPage > 0) { _currentPage--; DisplayPage(-1, 2); }
@@ -1943,13 +1994,39 @@ namespace ComicViewer
         }
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key.Equals(Key.Up))
+
+            if (e.Key == Key.Right &&
+        ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control || (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift))
             {
-                MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset - System.Windows.SystemParameters.PrimaryScreenHeight / 3);
+                if (_currentFilePath != null && File.Exists(_currentFilePath))
+                {
+                    OpenAdjacentFile(1);
+                }
+
+                // Your logic here
+                e.Handled = true; // Prevents the event from routing further
+            }
+            else if (e.Key == Key.Left &&
+        ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control || (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift))
+            {
+                if (_currentFilePath != null && File.Exists(_currentFilePath))
+                {
+                    OpenAdjacentFile(-1);
+                }
+                // Your logic here
+                e.Handled = true; // Prevents the event from routing further
+            }
+            else if (e.Key.Equals(Key.Up))
+            {
+                e.Handled = true;
+                _isUpPressed = true;
+                //MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset - System.Windows.SystemParameters.PrimaryScreenHeight / 3);
             }
             else if (e.Key.Equals(Key.Down))
             {
-                MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset + System.Windows.SystemParameters.PrimaryScreenHeight / 3);
+                e.Handled = true;
+                _isDownPressed = true;
+                //MainScroll.ScrollToVerticalOffset(MainScroll.VerticalOffset + System.Windows.SystemParameters.PrimaryScreenHeight / 3);
 
             }
             else if (e.Key.Equals(Key.Space))
@@ -1983,6 +2060,40 @@ namespace ComicViewer
                 }
             }
 
+        }
+
+        private void OpenAdjacentFile(int next)
+        {
+            FileInfo fileInfo = new FileInfo(_currentFilePath);
+            DirectoryInfo directoryInfo = fileInfo.Directory;
+
+            List<FileInfo> files = directoryInfo.GetFiles().OrderBy(f => f.Name, new NaturalSortComparer()).ToList();
+
+            for (int i = 0; i < files.Count; i++)
+            {
+                var file = files[i];
+                if (fileInfo.Name == file.Name)
+                {
+                    if (((i + next) < 0))
+                    {
+                        MessageBox.Show("First file reached.");
+                        break;
+                    }
+                    else if (((i + next) >= files.Count))
+                    {
+                        MessageBox.Show("Last file reached.");
+                        break;
+                    }
+
+                    var nextFile = files[i + next];
+                    if (nextFile.Exists)
+                    {
+                        OpenFile(nextFile.FullName);
+                    }
+
+                    break;
+                }
+            }
         }
 
         private void Window_Closing(object sender, CancelEventArgs e)
@@ -2511,7 +2622,14 @@ namespace ComicViewer
 
         private void OpenFile(string path)
         {
-            ProcessStartInfo ProcessInfo = new ProcessStartInfo("\"" + System.Environment.ProcessPath + "\"", "\"" + path + "\"");
+            string cmdstr = "\"" + path + "\"";
+
+            if (_fixedScale)
+            {
+                cmdstr += " fixed";
+            }
+
+            ProcessStartInfo ProcessInfo = new ProcessStartInfo("\"" + System.Environment.ProcessPath + "\"", cmdstr);
             ProcessInfo.CreateNoWindow = true;
             //Log.add("Open: " + path + ", " + System.Environment.ProcessPath, false);
             Process.Start(ProcessInfo);
