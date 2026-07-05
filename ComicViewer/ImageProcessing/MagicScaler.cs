@@ -257,8 +257,11 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Threading.Channels;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Media.Media3D;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Rebar;
 using WpfPixelFormats = System.Windows.Media.PixelFormats;
 
 namespace ComicViewer;
@@ -320,7 +323,7 @@ public static class MagicScalerImageFactory
         using var pipeline = MagicImageProcessor.BuildPipeline(
                                  new MemoryStream(data, writable: false), settings);
         Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={pipeline.Settings.UnsharpMask.Threshold},Amount={pipeline.Settings.UnsharpMask.Amount},Radius={pipeline.Settings.UnsharpMask.Radius}");
-        return (PipelineToBitmapSource(pipeline.PixelSource), frameInfo.Width, frameInfo.Height);
+        return (PipelineToBitmapSource(pipeline.PixelSource, null, 0), frameInfo.Width, frameInfo.Height);
     }
 
     // -------------------------------------------------------------------------
@@ -349,13 +352,21 @@ public static class MagicScalerImageFactory
                 $"(implies {(double)pixels.Length / (originalWidth * originalHeight):F2} bands).");
 
         // libjxl outputs RGB(A); MagicScaler's IPixelSource expects BGR(A).
+        byte[] icc = JxlDecoder.TryExtractIccProfile(data);
+        if (icc != null)
+            IccSrgbTransform.TransformToSrgbInPlace(pixels, originalWidth, originalHeight, bands, icc);
+
         if (bands >= 3) SwapRedBlue(pixels, bands);
 
         using var src = new RawPixelSource(pixels, originalWidth, originalHeight, bands, BandsToWicGuid(bands));
+
         var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear, (double)originalWidth / (double)targetWidth);
 
+
+
+
         using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);
-        return (PipelineToBitmapSource(pipeline.PixelSource), originalWidth, originalHeight);
+        return (PipelineToBitmapSource(pipeline.PixelSource, null, 0), originalWidth, originalHeight);
     }
 
     // -------------------------------------------------------------------------
@@ -388,8 +399,8 @@ public static class MagicScalerImageFactory
         var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear, (double)originalWidth / (double)targetWidth);
 
         using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);
-        Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={pipeline.Settings.UnsharpMask.Threshold},Amount={pipeline.Settings.UnsharpMask.Amount},Radius={pipeline.Settings.UnsharpMask.Radius}");
-        return (PipelineToBitmapSource(pipeline.PixelSource), originalWidth, originalHeight);
+        //Debug.WriteLine($"MagicScaler settings: Unsharp: Threshold={pipeline.Settings.UnsharpMask.Threshold},Amount={pipeline.Settings.UnsharpMask.Amount},Radius={pipeline.Settings.UnsharpMask.Radius}");
+        return (PipelineToBitmapSource(pipeline.PixelSource, null, 0), originalWidth, originalHeight);
     }
 
     // -------------------------------------------------------------------------
@@ -402,7 +413,7 @@ public static class MagicScalerImageFactory
     /// No intermediate encode/decode occurs — this is the critical path optimisation
     /// over the previous ProcessImage → PNG → BitmapDecoder approach.
     /// </summary>
-    private static BitmapSource PipelineToBitmapSource(IPixelSource src)
+    private static BitmapSource PipelineToBitmapSource(IPixelSource src, byte[] icc, int channels)
     {
         PixelFormat wpfFormat = WicGuidToWpfFormat(src.Format);
 
@@ -413,11 +424,17 @@ public static class MagicScalerImageFactory
 
         byte[] pixels = new byte[height * stride];
 
+        // 3. Define the Target Destination ColorContext 
+        // (e.g., using a specific ICC profile file path)
+
+
+
         // Pull all rows in one call. MagicScaler processes lazily row-by-row
         // as CopyPixels streams through the pipeline — memory usage stays low.
         src.CopyPixels(new Rectangle(0, 0, width, height), stride, pixels.AsSpan());
 
         var result = BitmapSource.Create(width, height, 96, 96, wpfFormat, null, pixels, stride);
+
         result.Freeze();
         return result;
     }
@@ -430,7 +447,7 @@ public static class MagicScalerImageFactory
       int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear, double ratio)
     {
 
-        UnsharpMaskSettings us = new UnsharpMaskSettings(40, 1.5, 0x55);
+        //UnsharpMaskSettings us = new UnsharpMaskSettings(40, 1.5, 0x55);
 
         // SaveFormat is not a property of ProcessImageSettings — it was removed.
         // Since we use BuildPipeline + CopyPixels, no encoder is involved at all.

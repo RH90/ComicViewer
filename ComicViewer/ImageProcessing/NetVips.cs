@@ -1,4 +1,6 @@
 ﻿using ComicViewer.ImageProcessing;
+using Microsoft.VisualBasic.Logging;
+
 
 
 //using ImageMagick;
@@ -29,7 +31,10 @@ public static class VipsImageFactory
         //return Image.JpegloadBuffer(data);
         Stopwatch sw = Stopwatch.StartNew();
 
+        //Image image = Image.NewFromBuffer(data);
         Image image = Image.NewFromBuffer(data);
+
+        //MainWindow.Log.add($"Vips: Loaded {image.Width}×{image.Height} ({image.Bands} bands), {image.Interpretation}", false);
         sw.Stop();
 
         imageLoad = sw.ElapsedMilliseconds;
@@ -48,7 +53,7 @@ public static class VipsImageFactory
     {
         Stopwatch sw = Stopwatch.StartNew();
 
-        var (pixels, w, h, _) = JxlDecoder.DecodeInternalRaw(data, new JxlDecodeOptions { Threads = Environment.ProcessorCount });
+        var (pixels, w, h, hasAlpha) = JxlDecoder.DecodeInternalRaw(data, new JxlDecodeOptions { Threads = Environment.ProcessorCount });
 
         int width = (int)w;
         int height = (int)h;
@@ -67,10 +72,17 @@ public static class VipsImageFactory
                 $"JXL decode produced an unexpected buffer size: {total} bytes for " +
                 $"{width}×{height} (implies {(double)total / (width * height):F2} bands).");
 
-        //return Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar).Copy(
-        //    width: width, height: height, interpretation: Enums.Interpretation.Srgb);
+        //using Image imgMem = Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
+        //Image image = imgMem.Copy(width: width, height: height, bands: bands, interpretation: Enums.Interpretation.Srgb);
 
-        Image image = Image.NewFromMemory(pixels, width, height, bands, Enums.BandFormat.Uchar);
+        Image image = Image.NewFromMemoryCopy(pixels, width, height, bands, Enums.BandFormat.Uchar).IccTransform("srgb");
+
+        byte[]? iccBytes = JxlDecoder.TryExtractIccProfile(data);
+        if (iccBytes != null)
+        {
+            image = image.Mutate(i => i.Set("icc-profile-data", iccBytes));
+        }
+
 
         sw.Stop();
         imageLoad = sw.ElapsedMilliseconds;
@@ -90,10 +102,11 @@ public static class VipsImageFactory
 
         int width, height;
         byte[] rgba;
+        bool alpha = false;
 
         using (var stream = new MemoryStream(data))
         {
-            WmpBitmapDecoder decoder = new WmpBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnDemand);
+            WmpBitmapDecoder decoder = new WmpBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default);
 
 
             //var decoder = BitmapDecoder.Create(stream,
@@ -102,26 +115,43 @@ public static class VipsImageFactory
             var frame = decoder.Frames[0];
 
 
-            var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+            //MainWindow.Log.add("JXR PixelFormat: " + frame.Format, false);
 
-            width = converted.PixelWidth;
-            height = converted.PixelHeight;
-            int stride = width * 4;
+            if (frame.Format == PixelFormats.Rgb24)
+            {
+                width = frame.PixelWidth;
+                height = frame.PixelHeight;
+                int stride = width * 3;
 
-            rgba = new byte[height * stride];
-            converted.CopyPixels(rgba, stride, 0);
+                rgba = new byte[height * stride];
+                frame.CopyPixels(rgba, stride, 0);
+            }
+            else
+            {
+                var converted = new FormatConvertedBitmap(frame, PixelFormats.Rgb24, null, 0);
+                width = converted.PixelWidth;
+                height = converted.PixelHeight;
+                int stride = width * 3;
+
+                rgba = new byte[height * stride];
+                converted.CopyPixels(rgba, stride, 0);
+            }
+            //var converted = new FormatConvertedBitmap(frame, PixelFormats.Rgb24, null, 0);
+
+
+
         }
 
         // WIC outputs BGRA; libvips expects RGB-ordered data → swap R↔B.
         //SwapRedBlue(rgba);
         //return RawToVips(rgba, width, height, hasAlpha: true);
 
-        using Image bgra = RawToVips(rgba, width, height, hasAlpha: true);
-        Image reorder = ReorderBands(bgra, new[] { 2, 1, 0, 3 });
+        Image bgra = RawToVips(rgba, width, height, hasAlpha: alpha);
+        //Image reorder = ReorderBands(bgra, new[] { 2, 1, 0, 3 });
 
         sw.Stop();
         imageLoad = sw.ElapsedMilliseconds;
-        return reorder;
+        return bgra;
     }
 
     // -------------------------------------------------------------------------
@@ -304,7 +334,7 @@ public static class VipsImageFactory
 
                             if ((temp.Bands == 4 || temp.HasAlpha()) && temp.Interpretation != Interpretation.Cmyk)
                             {
-                                temp = temp.Flatten(background: new double[] { 0 });
+                                temp = temp.Flatten(background: new double[] { MainWindow.backgroundValue });
                             }
 
                             //Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
@@ -313,7 +343,7 @@ public static class VipsImageFactory
                             //resized = img1.Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2).Bandjoin(alpha).Cast(Enums.BandFormat.Uchar);
 
                             //MainWindow.Log.add("Bands2: " + temp.Bands + ", " + temp.HasAlpha() + ", " + temp.Interpretation + ", " + temp.Bands, false);
-                            if (temp.Interpretation == Interpretation.Multiband || temp.Interpretation == Interpretation.Rgb16)
+                            if (temp.Interpretation == Interpretation.Multiband || temp.Interpretation == Interpretation.Rgb16 || temp.Interpretation == Interpretation.Grey16)
                             {
                                 using Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
                                 using Image labs = img1.Colourspace(Interpretation.Lab);
@@ -334,7 +364,9 @@ public static class VipsImageFactory
                         else
                         {
 
-                            if (temp.Interpretation == Interpretation.Rgb16)
+                            MainWindow.Log.add("Bands: " + temp.Interpretation, false);
+
+                            if (temp.Interpretation == Interpretation.Rgb16 || temp.Interpretation == Interpretation.Grey16)
                             {
 
                                 //using Image sharpenImg = labs.ThumbnailImage(targetWidth, targetHeight, linear: true).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
@@ -404,7 +436,11 @@ public static class VipsImageFactory
 
 
 
-            byte[] pixels = bgra.WriteToMemory<byte>();
+
+            byte[] pixels = bgra.WriteToMemory<byte>(); ;
+
+
+
             int stride = bgra.Width * bgra.Bands;
 
             PixelFormat pixelFormat = bgra.Bands switch
@@ -433,9 +469,7 @@ public static class VipsImageFactory
 
             vipsImage?.Dispose();
             resized?.Dispose();
-            if (temp != null && temp != vipsImage)
-                temp.Dispose();
-
+            resized?.Dispose();
             //System.GC.Collect();
         }
     }
@@ -465,7 +499,7 @@ public static class VipsImageFactory
         // ── 2. Collapse exotic band counts ───────────────────────────────────
         if (src.Bands > 4)
         {
-            Image flat = src.Flatten();
+            Image flat = src.Flatten(background: new double[] { MainWindow.backgroundValue });
             if (ownsSrc) src.Dispose();
             src = flat;
             ownsSrc = true;
@@ -476,7 +510,7 @@ public static class VipsImageFactory
             return src.Bands switch
             {
                 1 => src.Copy(),
-                2 => src.Flatten(background: new double[] { 255 }),
+                2 => src.Flatten(background: new double[] { MainWindow.backgroundValue }),
                 3 => ReorderBands(src, 2, 1, 0),
                 4 => ReorderBands(src, 2, 1, 0, 3),
                 _ => throw new NotSupportedException($"Unexpected band count: {src.Bands}")
@@ -494,14 +528,14 @@ public static class VipsImageFactory
     private static Image ToBgraNoIcc(Image img)
     {
         bool didFlatten = img.Bands > 4;
-        Image src = didFlatten ? img.Flatten() : img;
+        Image src = didFlatten ? img.Flatten(background: new double[] { MainWindow.backgroundValue }) : img;
         //MainWindow.Log.add("Bands: " + src.Bands, false);
         try
         {
             return src.Bands switch
             {
                 1 => src.Copy(),
-                2 => src.Flatten(background: new double[] { 255 }),
+                2 => src.Flatten(background: new double[] { MainWindow.backgroundValue }),
                 3 => ReorderBands(src, 2, 1, 0),
                 4 => ReorderBands(src, 2, 1, 0, 3),
                 _ => throw new NotSupportedException($"Unexpected band count: {src.Bands}")
@@ -576,7 +610,7 @@ public static class VipsImageFactory
     }
 
     public static Image RawToVips(byte[] pixels, int width, int height, bool hasAlpha)
-        => Image.NewFromMemory(pixels, width, height,
+        => Image.NewFromMemoryCopy(pixels, width, height,
                bands: hasAlpha ? 4 : 3,
                format: Enums.BandFormat.Uchar);
 
@@ -672,7 +706,7 @@ public static class VipsImageFactory
     private static Image NormaliseForExport(Image img)
     {
         // Collapse CMYK / 5+ bands to RGB/RGBA first.
-        Image src = img.Bands > 4 ? img.Flatten() : img;
+        Image src = img.Bands > 4 ? img.Flatten(background: new double[] { MainWindow.backgroundValue }) : img;
         bool ownsSrc = img.Bands > 4;
 
         try
@@ -683,7 +717,7 @@ public static class VipsImageFactory
                 1 => src.Copy(),
 
                 // Greyscale + alpha — flatten onto white, output as 1-band.
-                2 => src.Flatten(background: new double[] { 255 }),
+                2 => src.Flatten(background: new double[] { MainWindow.backgroundValue }),
 
                 // RGB or RGBA — pass through; PixelMapping tells ImageMagick
                 // the channel order so no manual band swap needed.

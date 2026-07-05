@@ -42,6 +42,11 @@ namespace ComicViewer
         private const int JXL_DEC_NEED_IMAGE_OUT_BUFFER = 5;
         private const int JXL_DEC_BASIC_INFO = 0x40;
         private const int JXL_DEC_FULL_IMAGE = 0x1000;
+        private const int JXL_DEC_COLOR_ENCODING = 0x400;
+
+        // JxlColorProfileTarget
+        private const int JXL_COLOR_PROFILE_TARGET_ORIGINAL = 0;
+        private const int JXL_COLOR_PROFILE_TARGET_DATA = 1;
 
         private const int JXL_TYPE_UINT8 = 2;
         private const int JXL_NATIVE_ENDIAN = 0;
@@ -84,6 +89,9 @@ namespace ComicViewer
         }
 
         // ── P/Invoke – jxl.dll ────────────────────────────────────────────────
+        [DllImport(MainWindow.libJxlMain, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int JxlDecoderGetColorAsICCProfile(
+            IntPtr dec, int target, byte[] icc_profile, nuint size);
 
         [DllImport(MainWindow.libJxlMain, CallingConvention = CallingConvention.Cdecl)]
         private static extern IntPtr JxlDecoderCreate(IntPtr memory_manager);
@@ -114,6 +122,10 @@ namespace ComicViewer
         private static extern int JxlDecoderSetImageOutBuffer(
             IntPtr dec, ref JxlPixelFormat format, byte[] buffer, nuint size);
 
+        [DllImport(MainWindow.libJxlMain, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int JxlDecoderGetICCProfileSize(
+        IntPtr dec, int target, out nuint size);
+
         // parallel_runner must be a raw native function pointer, NOT a managed delegate.
         [DllImport(MainWindow.libJxlMain, CallingConvention = CallingConvention.Cdecl)]
         private static extern int JxlDecoderSetParallelRunner(
@@ -134,6 +146,8 @@ namespace ComicViewer
         [DllImport(MainWindow.libJxlThreads, CallingConvention = CallingConvention.Cdecl)]
         private static extern void JxlThreadParallelRunnerDestroy(IntPtr runner);
 
+
+
         // ── Win32 helpers ─────────────────────────────────────────────────────
 
         [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
@@ -144,6 +158,8 @@ namespace ComicViewer
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr LoadLibrary(string lpFileName);
+
+
 
         // ── Cached raw native function pointer ───────────────────────────────
         //
@@ -446,6 +462,100 @@ namespace ComicViewer
                 JxlDecoderDestroy(dec);
                 if (runner != IntPtr.Zero)
                     JxlThreadParallelRunnerDestroy(runner);
+            }
+        }
+        // ═════════════════════════════════════════════════════════════════════
+        // ICC profile extraction + NetVips image creation
+        // ═════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Extracts the embedded ICC profile from a JXL byte array, or returns
+        /// null if the file uses a named colour encoding (e.g. plain sRGB) and
+        /// therefore has no raw ICC bytes to retrieve.
+        ///
+        /// The returned bytes describe the colorspace of the <em>decoded</em>
+        /// pixel data (JXL_COLOR_PROFILE_TARGET_DATA), which is what must be
+        /// attached to the NetVips image so it interprets the raw pixels
+        /// correctly before any further colour management steps.
+        ///
+        /// NOTE: libjxl 0.8+ dropped the JxlPixelFormat* parameter from
+        /// JxlDecoderGetICCProfileSize / JxlDecoderGetColorAsICCProfile.
+        /// If you are on 0.7.x you will need to add the format parameter back.
+        /// </summary>
+        /// <param name="jxlData">Raw bytes of a .jxl file.</param>
+        /// <returns>
+        ///   The raw ICC profile bytes, or null if no ICC profile is present.
+        /// </returns>
+        public static byte[]? TryExtractIccProfile(byte[] jxlData)
+        {
+            if (jxlData is null || jxlData.Length == 0)
+                throw new ArgumentNullException(nameof(jxlData));
+
+            IntPtr dec = JxlDecoderCreate(IntPtr.Zero);
+            if (dec == IntPtr.Zero)
+                throw new InvalidOperationException("JxlDecoderCreate returned null.");
+
+            try
+            {
+                // Subscribe to BASIC_INFO + COLOR_ENCODING only — we don't need
+                // pixel data, so we stop as soon as the color event fires.
+                if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING)
+                        != JXL_DEC_SUCCESS)
+                    throw new InvalidOperationException("JxlDecoderSubscribeEvents failed.");
+
+                if (JxlDecoderSetInput(dec, jxlData, (nuint)jxlData.Length) != JXL_DEC_SUCCESS)
+                    throw new InvalidOperationException("JxlDecoderSetInput failed.");
+
+                JxlDecoderCloseInput(dec);
+
+                while (true)
+                {
+                    int status = JxlDecoderProcessInput(dec);
+                    switch (status)
+                    {
+                        case JXL_DEC_BASIC_INFO:
+                            // Just consume it; we need it before COLOR_ENCODING fires.
+                            break;
+
+                        case JXL_DEC_COLOR_ENCODING:
+                            {
+                                // Ask for the size of the ICC profile for the decoded data.
+                                int sizeStatus = JxlDecoderGetICCProfileSize(
+                                    dec, JXL_COLOR_PROFILE_TARGET_DATA, out nuint iccSize);
+
+                                // JXL_DEC_SUCCESS → ICC profile present; anything else
+                                // (typically JXL_DEC_ERROR) means the image uses a named
+                                // colour encoding with no raw ICC bytes.
+                                if (sizeStatus != JXL_DEC_SUCCESS || iccSize == 0)
+                                    return null;
+
+                                byte[] iccBytes = new byte[(int)iccSize];
+                                if (JxlDecoderGetColorAsICCProfile(
+                                        dec, JXL_COLOR_PROFILE_TARGET_DATA,
+                                        iccBytes, iccSize) != JXL_DEC_SUCCESS)
+                                    throw new InvalidOperationException(
+                                        "JxlDecoderGetColorAsICCProfile failed.");
+
+                                return iccBytes;
+                            }
+
+                        case JXL_DEC_SUCCESS:
+                            // File had no color-encoding event (shouldn't happen,
+                            // but handle gracefully).
+                            return null;
+
+                        case JXL_DEC_ERROR:
+                            throw new InvalidOperationException(
+                                "libjxl reported JXL_DEC_ERROR during ICC extraction.");
+
+                        default:
+                            break;
+                    }
+                }
+            }
+            finally
+            {
+                JxlDecoderDestroy(dec);
             }
         }
 

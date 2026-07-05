@@ -61,7 +61,8 @@ namespace ComicViewer
         //private MemoryStream _mediaStream;
         //private StreamMediaInput _mediaInput;
         //private Media _media;
-        private SolidColorBrush mainBackground = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x1e, 0x1e, 0x1e, 0x1e));
+        public static byte backgroundValue = 0x10;
+        private SolidColorBrush mainBackground = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, backgroundValue, backgroundValue, backgroundValue));
         private GFG compare = new GFG();
         private Thread gifThread = null;
         private bool _isVideoLoaded = false;
@@ -123,8 +124,10 @@ namespace ComicViewer
         public MainWindow()
         {
 
-            InitializeComponent();
 
+
+            InitializeComponent();
+            mainWindow.Background = mainBackground;
 
             this.Top = 0;
             //System.Diagnostics.Debug.WriteLine(jsonPath);
@@ -134,6 +137,7 @@ namespace ComicViewer
             //videoView.Loaded += VideoView_Loaded;
 
             ComicDisplay.Loaded += MainScroll_Loaded;
+
 
 
             //dispatcherTimer.Interval = TimeSpan.FromMilliseconds(10);
@@ -568,7 +572,7 @@ namespace ComicViewer
                 //}
                 //else
                 //{
-                mainWindow.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0x1e, 0x1e, 0x1e));
+                //mainWindow.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0x1e, 0x1e, 0x1e));
                 //videoViewGrid.Visibility = Visibility.Hidden;
                 //videoView.Visibility = Visibility.Hidden;
                 //if (_mediaPlayer != null)
@@ -671,6 +675,17 @@ namespace ComicViewer
                             WebtoonView(imageToShow);
                         }
 
+                    }
+                    else
+                    {
+                        FileStream fileStream = new FileStream(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "error.png"), FileMode.Open, FileAccess.Read);
+
+                        var img = new System.Windows.Media.Imaging.BitmapImage();
+                        img.BeginInit();
+                        img.StreamSource = fileStream;
+                        img.EndInit();
+                        img.Freeze();
+                        ComicDisplay.Source = img;
                     }
                 }
 
@@ -909,6 +924,7 @@ namespace ComicViewer
 
         public static List<(BitmapSource Bitmap, int Delay)> ExtractWebPFrames(Stream webpStream)
         {
+
             byte[] webpBytes;
             using (var ms = new MemoryStream())
             {
@@ -1137,17 +1153,25 @@ namespace ComicViewer
         }
         private void UpdateInfo(BitmapSource bi)
         {
+
+
             if (_IsWebtoon && bi != null)
             {
                 TextSlider.Text = String.Format("{0}x{1} (View: {2}x{3})\n{4}/{5}",
                     bi.PixelWidth, bi.PixelHeight, MainScroll.ViewportWidth, MainScroll.ViewportHeight, (_currentPage + 1), _pages.Count);
                 SetTitleText("");
             }
-            else if (_cache.ContainsKey(_currentPage) || gifImg != null)
+            else if ((_cache.ContainsKey(_currentPage) || gifImg != null))
             {
 
 
                 ImageContainer currentImage = new ImageContainer(gifImg != null ? gifImg : _cache[_currentPage].ResizedImage, gifImg != null ? (int)gifImg.PixelWidth : _cache[_currentPage].OriginalWidth, gifImg != null ? (int)gifImg.PixelHeight : _cache[_currentPage].OriginalHeight);
+
+                if (currentImage.ResizedImage == null)
+                {
+                    SetTitleText("");
+                    return;
+                }
 
                 string dimensionResized = (int)currentImage.ResizedImage.PixelWidth + "x" + (int)currentImage.ResizedImage.PixelHeight;
                 string dimensionOriginal = (int)currentImage.OriginalWidth + "x" + (int)currentImage.OriginalHeight;
@@ -1238,6 +1262,8 @@ namespace ComicViewer
                     _pages[index].Key.ToLower().Contains(".jxl") ||
                     _pages[index].Key.ToLower().Contains(".webp") ||
                     _pages[index].Key.ToLower().Contains(".gif") ||
+                    _pages[index].Key.ToLower().Contains(".tif") ||
+                    _pages[index].Key.ToLower().Contains(".tiff") ||
                     _pages[index].Key.ToLower().Contains(".avif")
                    )
                     {
@@ -1269,7 +1295,14 @@ namespace ComicViewer
                 }
                 this.Dispatcher.Invoke(new Action(() =>
                 {
+                    //try
+                    //{
                     UpdateInfo(null);
+                    //}
+                    //catch
+                    //{
+                    //}
+
                     System.GC.Collect();
                 }));
                 semImg.Release();
@@ -1280,7 +1313,11 @@ namespace ComicViewer
 
         private void ProcessImage(int index, MemoryStream ms, out int OWidth, out int OHeight, out BitmapSource bs, bool isCurrentPage)
         {
+            //Stopwatch sw = new Stopwatch();
+            //sw.Start();
             (OWidth, OHeight) = ImageDimensionReader.Read(ms);
+            //sw.Stop();
+            //Log.add("ImageDimensionReader.Read: " + sw.ElapsedMilliseconds + " ms", false);
 
             ms.Position = 0;
 
@@ -1465,6 +1502,8 @@ namespace ComicViewer
             //Debug.WriteLine((System.Windows.SystemParameters.PrimaryScreenWidth * 1.2) + " : " + newWidth + " : " + _scalingAlgo + ":" + ratioWidth);
 
             ms.Close();
+
+
             //bs = VipsImageFactory.Scale(img, FilterType.SincFast, newWidth, newHeight, true);
             //img.Dispose();
         }

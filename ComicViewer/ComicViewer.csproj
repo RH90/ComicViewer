@@ -67,6 +67,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <None Update="error.png">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
 	  <None Update="jxl\bin\brotli.exe">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>

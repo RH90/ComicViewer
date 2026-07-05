@@ -66,6 +66,14 @@ public static class ImageDimensionReader
             && magic[8] == 0x0D && magic[9] == 0x0A && magic[10] == 0x87 && magic[11] == 0x0A)
             return ReadJxlContainer(stream);
 
+        // ── TIFF little-endian: 49 49 2A 00 ─────────────────────────────────
+        if (magic[0] == 0x49 && magic[1] == 0x49 && magic[2] == 0x2A && magic[3] == 0x00)
+            return ReadTiff(stream, bigEndian: false);
+
+        // ── TIFF big-endian: 4D 4D 00 2A ────────────────────────────────────
+        if (magic[0] == 0x4D && magic[1] == 0x4D && magic[2] == 0x00 && magic[3] == 0x2A)
+            return ReadTiff(stream, bigEndian: true);
+
         // ── JXR little-endian: 49 49 BC 01 ──────────────────────────────────
         if (magic[0] == 0x49 && magic[1] == 0x49 && magic[2] == 0xBC && magic[3] == 0x01)
             return ReadJxr(stream, bigEndian: false);
@@ -218,6 +226,60 @@ public static class ImageDimensionReader
         ReadExact(s, buf);
         int h = (int)BinaryPrimitives.ReadUInt32BigEndian(buf);
         return (w, h);
+    }
+
+    // =========================================================================
+    // TIFF
+    //
+    // Header (all values respect the byte-order mark):
+    //   [2 B byte-order: "II"=LE / "MM"=BE]
+    //   [2 B magic: 42 (0x002A)]
+    //   [4 B IFD0 offset]
+    //
+    // IFD entry (12 bytes): [2 B tag][2 B type][4 B count][4 B value/offset]
+    //   Tag 0x0100 = ImageWidth  (SHORT=3 or LONG=4)
+    //   Tag 0x0101 = ImageLength (SHORT=3 or LONG=4, i.e. pixel height)
+    //
+    // For count=1 the value is stored inline in bytes 8-11 of the entry.
+    // BigTIFF (magic=43, 0x002B) uses 8-byte IFD offsets and is not handled here.
+    // =========================================================================
+    private static (int, int) ReadTiff(MemoryStream s, bool bigEndian)
+    {
+        Span<byte> buf4 = stackalloc byte[4];
+        Span<byte> buf2 = stackalloc byte[2];
+
+        s.Seek(4, SeekOrigin.Begin); // skip byte-order(2) + magic(2)
+        ReadExact(s, buf4);
+        long ifdOffset = bigEndian
+            ? BinaryPrimitives.ReadUInt32BigEndian(buf4)
+            : BinaryPrimitives.ReadUInt32LittleEndian(buf4);
+
+        s.Seek(ifdOffset, SeekOrigin.Begin);
+        ReadExact(s, buf2);
+        int entryCount = bigEndian
+            ? BinaryPrimitives.ReadUInt16BigEndian(buf2)
+            : BinaryPrimitives.ReadUInt16LittleEndian(buf2);
+
+        int? w = null, h = null;
+        Span<byte> entry = stackalloc byte[12];
+
+        for (int i = 0; i < entryCount && (w is null || h is null); i++)
+        {
+            ReadExact(s, entry);
+            ushort tag = Rd16(entry, bigEndian);
+            ushort type = Rd16(entry[2..], bigEndian);
+
+            // Value is inline in bytes 8-11 for count=1.
+            int val = type == 3 // SHORT (16-bit)
+                ? Rd16(entry[8..], bigEndian)
+                : (int)Rd32(entry[8..], bigEndian); // LONG (32-bit) or fallback
+
+            if (tag == 0x0100) w = val; // ImageWidth
+            else if (tag == 0x0101) h = val; // ImageLength (= pixel height)
+        }
+
+        return (w ?? throw new InvalidDataException("TIFF: ImageWidth tag (0x0100) not found."),
+                h ?? throw new InvalidDataException("TIFF: ImageLength tag (0x0101) not found."));
     }
 
     /// <summary>
