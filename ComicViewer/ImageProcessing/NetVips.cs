@@ -1,4 +1,5 @@
 ﻿using ComicViewer.ImageProcessing;
+using LibHeifSharp;
 using Microsoft.VisualBasic.Logging;
 
 
@@ -92,6 +93,33 @@ public static class VipsImageFactory
     }
 
     /// <summary>
+    /// Decodes the primary image of an AVIF file into a NetVips.Image,
+    /// forcing libheif to use the dav1d AV1 decoder plugin when available.
+    /// </summary>
+    public static Image FromAVIF(byte[] data)
+    {
+        AVIF.Decode(data, out var pixelData, out int width, out int height, out bool hasAlpha, out int bands, out bool IsPremultipliedAlpha);
+
+        var image = Image.NewFromMemoryCopy(pixelData, width, height, bands, Enums.BandFormat.Uchar);
+        image = image.Copy(interpretation: Enums.Interpretation.Srgb);
+
+        // libheif can return premultiplied alpha depending on the source file;
+        // NetVips/vips conventions expect straight alpha, so normalize it.
+        if (hasAlpha && IsPremultipliedAlpha)
+        {
+            image = image.Unpremultiply().Cast(Enums.BandFormat.Uchar);
+        }
+
+        return image;
+    }
+
+    /// <summary>
+    /// Finds the dav1d decoder's ID string via libheif's decoder registry,
+    /// falling back to the plugin's well-known ID if enumeration isn't available.
+    /// </summary>
+
+
+    /// <summary>
     /// Decodes a JPEG XR file via WIC (Windows Imaging Component).
     /// Uses BitmapCacheOption.OnDemand to avoid retaining a full decoded
     /// copy in WIC's unmanaged cache.
@@ -126,6 +154,15 @@ public static class VipsImageFactory
                 rgba = new byte[height * stride];
                 frame.CopyPixels(rgba, stride, 0);
             }
+            //else if (frame.Format == PixelFormats.Bgra32)
+            //{
+            //    width = frame.PixelWidth;
+            //    height = frame.PixelHeight;
+            //    int stride = width * 4;
+            //    rgba = new byte[height * stride];
+            //    frame.CopyPixels(rgba, stride, 0);
+            //    alpha = true;
+            //}
             else
             {
                 var converted = new FormatConvertedBitmap(frame, PixelFormats.Rgb24, null, 0);
@@ -147,6 +184,7 @@ public static class VipsImageFactory
         //return RawToVips(rgba, width, height, hasAlpha: true);
 
         Image bgra = RawToVips(rgba, width, height, hasAlpha: alpha);
+        //Image bgra = ReorderBands(RawToVips(rgba, width, height, hasAlpha: alpha), new[] { 2, 1, 0, 3 });
         //Image reorder = ReorderBands(bgra, new[] { 2, 1, 0, 3 });
 
         sw.Stop();
@@ -179,27 +217,11 @@ public static class VipsImageFactory
 
         Stopwatch sw = Stopwatch.StartNew();
 
-        Image temp = vScale < 1 && aiScale == 0 ? vipsImage : ApplyIccProfile(vipsImage);
+        //Image temp = vScale < 1 && aiScale == 0 ? vipsImage : ApplyIccProfile(vipsImage);
+        Image temp = ApplyIccProfile(vipsImage);
 
         try
         {
-            //using Image temp = ToBgra(vipsImage);
-
-
-
-
-            //if (vScale > 1)
-            //{
-            //    temp = ApplyIccProfile(vipsImage);
-            //}
-            //else
-            //{
-            //    temp = (vipsImage);
-            //}
-
-
-
-
 
             didResize = (vScale != 0);
 
@@ -227,6 +249,11 @@ public static class VipsImageFactory
 
             if (didResize)
             {
+                if ((temp.Bands == 4 || temp.HasAlpha()) && temp.Interpretation != Interpretation.Cmyk)
+                {
+                    temp = temp.Flatten(background: new double[] { MainWindow.backgroundValue });
+                }
+
                 if (scalingAlgo == MainWindow.Scalers.VipsThumb)
                 {
                     resized = temp.ThumbnailImage(targetWidth, targetHeight);
@@ -293,6 +320,7 @@ public static class VipsImageFactory
                     }
                     else
                     {
+
                         //Sharpen: sigma=radius, m2=amount, x1=threshold
                         //Debug.WriteLine(temp.HasAlpha());
                         if (sharpenLevel > 0 && didResize && vScale != 1)
@@ -332,10 +360,10 @@ public static class VipsImageFactory
                             Debug.WriteLine(temp.Bands);
 
 
-                            if ((temp.Bands == 4 || temp.HasAlpha()) && temp.Interpretation != Interpretation.Cmyk)
-                            {
-                                temp = temp.Flatten(background: new double[] { MainWindow.backgroundValue });
-                            }
+                            //if ((temp.Bands == 4 || temp.HasAlpha()) && temp.Interpretation != Interpretation.Cmyk)
+                            //{
+                            //    temp = temp.Flatten(background: new double[] { MainWindow.backgroundValue });
+                            //}
 
                             //Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
                             //using Image alpha = img1.ExtractBand(img1.Bands - 1);
@@ -343,7 +371,7 @@ public static class VipsImageFactory
                             //resized = img1.Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2).Bandjoin(alpha).Cast(Enums.BandFormat.Uchar);
 
                             //MainWindow.Log.add("Bands2: " + temp.Bands + ", " + temp.HasAlpha() + ", " + temp.Interpretation + ", " + temp.Bands, false);
-                            if (temp.Interpretation == Interpretation.Multiband || temp.Interpretation == Interpretation.Rgb16 || temp.Interpretation == Interpretation.Grey16)
+                            if (temp.Interpretation == Interpretation.Multiband || temp.Interpretation == Interpretation.Rgb16 || temp.Interpretation == Interpretation.Grey16 || temp.Format != Enums.BandFormat.Uchar)
                             {
                                 using Image img1 = temp.Resize(hScale, vscale: vScale, kernel: kernel);
                                 using Image labs = img1.Colourspace(Interpretation.Lab);
@@ -364,11 +392,10 @@ public static class VipsImageFactory
                         else
                         {
 
-                            MainWindow.Log.add("Bands: " + temp.Interpretation, false);
+                            //MainWindow.Log.add("Bands: " + temp.Interpretation + ", " + temp.Format, false);
 
-                            if (temp.Interpretation == Interpretation.Rgb16 || temp.Interpretation == Interpretation.Grey16)
+                            if (temp.Interpretation == Interpretation.Rgb16 || temp.Interpretation == Interpretation.Grey16 || temp.Format != Enums.BandFormat.Uchar)
                             {
-
                                 //using Image sharpenImg = labs.ThumbnailImage(targetWidth, targetHeight, linear: true).Sharpen(sigma: sigma, m2: m2, x1: x1, y2: y2);
                                 using Image sharpenImg = temp.Resize(hScale, vscale: vScale, kernel: kernel);
                                 using Image labs = sharpenImg.Colourspace(Interpretation.Lab);
@@ -396,49 +423,14 @@ public static class VipsImageFactory
 
                     //}
                 }
-
-
-
-                //Debug.WriteLine(resized.Width);
-                //Debug.WriteLine(vipsImage.Width);
-                //resized = vipsImage.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
-                //vipsImage = vipsImage.Cast(Enums.BandFormat.Uchar);
-                //resized = vipsImage.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
-                //}
-                //}
-
-
-
-                // Resize in linear light — correct blending, better highlight preservation
-                //Image linear = vipsImage.Colourspace(Enums.Interpretation.Lab);
-                //resized = vipsImage.Resize(hScale, vscale: vScale, kernel: scalingAlgo);
-                //resized = resized.Colourspace(Enums.Interpretation.Srgb);
-
-
-                // Cast back to uchar — Unpremultiply outputs float, WriteToMemory expects uchar.
-
-                // Convert back to sRGB for display
-
             }
 
-
-            //using Image workImage = didResize ? resized : vipsImage;
-
-            //using Image workImage = didResize ? ReorderBands(resized, 2, 1, 0, 3) : ReorderBands(vipsImage, 2, 1, 0, 3);
             using Image workImage = didResize ? resized : vipsImage;
 
-
-
-            //using Image bgra = ToBgraNoIcc(workImage);
-
             //using Image bgra = vScale < 1 && aiScale == 0 ? ToBgraNoIcc(ApplyIccProfile(workImage)) : ToBgraNoIcc(workImage);
-            using Image bgra = vScale < 1 && aiScale == 0 ? ToBgraNoIcc(ApplyIccProfile(workImage)) : ToBgraNoIcc(workImage);
+            using Image bgra = ToBgraNoIcc(workImage);
 
-
-
-
-            byte[] pixels = bgra.WriteToMemory<byte>(); ;
-
+            byte[] pixels = bgra.WriteToMemory<byte>();
 
 
             int stride = bgra.Width * bgra.Bands;
@@ -629,70 +621,6 @@ public static class VipsImageFactory
 
     // ... all existing loaders and helpers stay unchanged ...
 
-    /// <summary>
-    /// Resizes a NetVips image using ImageMagick and returns a frozen WPF BitmapSource.
-    /// NetVips handles decoding (shrink-on-load, format support).
-    /// ImageMagick handles resampling.
-    /// </summary>
-    /// <param name="vipsImage">Decoded source image from any NetVips loader.</param>
-    /// <param name="filter">ImageMagick resampling filter. Defaults to Lanczos.</param>
-    /// <param name="targetWidth">Target width in pixels; 0 = preserve source width.</param>
-    /// <param name="targetHeight">Target height in pixels; 0 = preserve source height.</param>
-    /// <param name="keepAspectRatio">
-    /// If true, fits within the target box preserving aspect ratio.
-    /// If false, stretches to exact dimensions.
-    /// </param>
-    //public static BitmapSource Scale(
-    //    Image vipsImage,
-    //    FilterType filter = FilterType.Lanczos,
-    //    int targetWidth = 0,
-    //    int targetHeight = 0,
-    //    bool keepAspectRatio = true)
-    //{
-    //    // ── 1. Export raw pixels from NetVips ─────────────────────────────
-    //    // Flatten exotic band counts before export so ImageMagick always
-    //    // receives a known layout (Gray8, Bgr24, or Bgra32).
-    //    using Image normalised = NormaliseForExport(vipsImage);
-
-    //    byte[] pixels = normalised.WriteToMemory();
-    //    int width = normalised.Width;
-    //    int height = normalised.Height;
-    //    int bands = normalised.Bands;
-
-    //    var (magickStorage, magickColorspace, hasAlpha) = BandsToMagickFormat(bands);
-
-    //    // ── 2. Wrap raw pixels in a MagickImage ───────────────────────────
-    //    // ReadPixels ingests the raw interleaved buffer directly — no encode/
-    //    // decode round-trip, no temp file.
-    //    var readSettings = new PixelReadSettings(
-    //         (uint)width, (uint)height,
-    //         magickStorage,
-    //         bands == 1 ? "R" : (hasAlpha ? "BGRA" : "BGR"));
-
-    //    using var magick = new MagickImage();
-    //    magick.ReadPixels(pixels, readSettings);
-    //    magick.ColorSpace = magickColorspace;
-    //    magick.HasAlpha = hasAlpha;
-
-    //    // ── 3. Resize with ImageMagick ────────────────────────────────────
-    //    if (targetWidth > 0 || targetHeight > 0)
-    //    {
-    //        uint outW = targetWidth > 0 ? (uint)targetWidth : (uint)width;
-    //        uint outH = targetHeight > 0 ? (uint)targetHeight : (uint)height;
-
-    //        var geometry = new MagickGeometry(outW, outH)
-    //        {
-    //            // IgnoreAspectRatio=false preserves ratio; true stretches to exact size.
-    //            IgnoreAspectRatio = !keepAspectRatio
-    //        };
-
-    //        magick.FilterType = filter;
-    //        magick.Resize(geometry);
-    //    }
-
-    //    // ── 4. Export pixels from ImageMagick ─────────────────────────────
-    //    return MagickToBitmapSource(magick, hasAlpha);
-    //}
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -733,65 +661,4 @@ public static class VipsImageFactory
         }
     }
 
-    /// <summary>
-    /// Maps band count to the ImageMagick storage type, colourspace, and alpha flag.
-    /// </summary>
-    //private static (StorageType Storage, ColorSpace Colorspace, bool HasAlpha)
-    //    BandsToMagickFormat(int bands) => bands switch
-    //    {
-    //        1 => (StorageType.Char, ColorSpace.Gray, false),
-    //        3 => (StorageType.Char, ColorSpace.sRGB, false),
-    //        4 => (StorageType.Char, ColorSpace.sRGB, true),
-    //        _ => throw new NotSupportedException($"Unexpected band count: {bands}")
-    //    };
-
-    ///// <summary>
-    ///// Exports an ImageMagick image to a frozen WPF BitmapSource by reading
-    ///// its raw pixels directly — no encode/decode round-trip.
-    ///// </summary>
-    //private static BitmapSource MagickToBitmapSource(MagickImage magick, bool hasAlpha)
-    //{
-    //    int width = (int)magick.Width;
-    //    int height = (int)magick.Height;
-
-    //    PixelFormat wpfFormat;
-    //    byte[] pixels;
-    //    int stride;
-
-    //    if (magick.ColorSpace == ColorSpace.Gray)
-    //    {
-    //        using var pixelCollection = magick.GetPixels();
-    //        pixels = pixelCollection.ToByteArray("R")
-    //                 ?? throw new InvalidOperationException("MagickImage pixel export returned null.");
-    //        stride = width;
-    //        wpfFormat = PixelFormats.Gray8;
-    //    }
-    //    else if (hasAlpha)
-    //    {
-    //        using var pixelCollection = magick.GetPixels();
-    //        pixels = pixelCollection.ToByteArray("BGRA")
-    //                 ?? throw new InvalidOperationException("MagickImage pixel export returned null.");
-    //        stride = width * 4;
-    //        wpfFormat = PixelFormats.Bgra32;
-    //    }
-    //    else
-    //    {
-    //        using var pixelCollection = magick.GetPixels();
-    //        pixels = pixelCollection.ToByteArray("BGR")
-    //                 ?? throw new InvalidOperationException("MagickImage pixel export returned null.");
-    //        stride = width * 3;
-    //        wpfFormat = PixelFormats.Bgr24;
-    //    }
-
-    //    var result = BitmapSource.Create(
-    //        width, height,
-    //        96, 96,
-    //        wpfFormat, null,
-    //        pixels, stride);
-
-    //    result.Freeze();
-    //    return result;
-    //}
-    //public static Image LoadPngToVips(MemoryStream stream)
-    //    => Image.NewFromBuffer(stream.ToArray(), access: Enums.Access.Sequential);
 }

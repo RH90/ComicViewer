@@ -251,6 +251,9 @@
 //    }
 //}
 
+using ComicViewer.ImageProcessing;
+using LibHeifSharp;
+using NetVips;
 using PhotoSauce.MagicScaler;
 using PhotoSauce.MagicScaler.Transforms;
 using System;
@@ -266,7 +269,7 @@ using WpfPixelFormats = System.Windows.Media.PixelFormats;
 
 namespace ComicViewer;
 
-public enum MagicImageFormat { Jpeg, Png, WebP, Jxl, Jxr }
+public enum MagicImageFormat { Jpeg, Png, WebP, Jxl, Jxr, AVIF }
 
 public static class MagicScalerImageFactory
 {
@@ -302,6 +305,7 @@ public static class MagicScalerImageFactory
             MagicImageFormat.Png => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
             MagicImageFormat.WebP => ScaleEncoded(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
             MagicImageFormat.Jxl => ScaleJxl(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
+            MagicImageFormat.AVIF => ScaleAVIF(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
             MagicImageFormat.Jxr => ScaleJxr(data, targetWidth, targetHeight, keepAspectRatio, interpolation, linear),
             _ => throw new NotSupportedException($"Format '{format}' is not supported.")
         };
@@ -354,7 +358,20 @@ public static class MagicScalerImageFactory
         // libjxl outputs RGB(A); MagicScaler's IPixelSource expects BGR(A).
         byte[] icc = JxlDecoder.TryExtractIccProfile(data);
         if (icc != null)
-            IccSrgbTransform.TransformToSrgbInPlace(pixels, originalWidth, originalHeight, bands, icc);
+        {
+            try
+            {
+                IccSrgbTransform.TransformToSrgbInPlace(pixels, originalWidth, originalHeight, bands, icc);
+            }
+            catch (Exception ex)
+            {
+                MainWindow.Log.add($"Failed to set ICC profile on JXL image: {ex.Message}", false);
+            }
+        }
+
+
+
+
 
         if (bands >= 3) SwapRedBlue(pixels, bands);
 
@@ -363,6 +380,20 @@ public static class MagicScalerImageFactory
         var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear, (double)originalWidth / (double)targetWidth);
 
 
+
+
+        using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);
+        return (PipelineToBitmapSource(pipeline.PixelSource, null, 0), originalWidth, originalHeight);
+    }
+    public static (BitmapSource, int, int) ScaleAVIF(byte[] data, int targetWidth, int targetHeight, bool keepAspectRatio, InterpolationSettings interpolation, bool linear)
+    {
+
+        AVIF.Decode(data, out byte[] pixels, out int originalWidth, out int originalHeight, out bool hasAlpha, out int bands, out bool IsPremultipliedAlpha);
+
+        if (bands >= 3) SwapRedBlue(pixels, bands);
+        using var src = new RawPixelSource(pixels, originalWidth, originalHeight, bands, BandsToWicGuid(bands));
+
+        var settings = BuildSettings(targetWidth, targetHeight, keepAspectRatio, interpolation, linear, (double)originalWidth / (double)targetWidth);
 
 
         using var pipeline = MagicImageProcessor.BuildPipeline(src, settings);

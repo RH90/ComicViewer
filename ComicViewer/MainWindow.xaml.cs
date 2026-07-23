@@ -2,21 +2,29 @@
 
 using ComicViewer.Imaging;
 using ComicViewer.Objects;
+using Imazen.WebP;
+
 //using LibVLCSharp.Shared;
 using MetadataExtractor;
+using MetadataExtractor.Formats.FileSystem;
 using MetadataExtractor.Formats.Gif;
+using MetadataExtractor.Formats.WebP;
 using Microsoft.VisualBasic.FileIO;
 using Microsoft.Win32;
+using NetVips;
 using Newtonsoft.Json;
 using PhotoSauce.MagicScaler;
 using SharpCompress.Archives;
+using SharpCompress.Readers;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -25,6 +33,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Windows.Xps.Packaging;
 using Image = NetVips.Image;
 using Path = System.IO.Path;
 
@@ -179,6 +188,8 @@ namespace ComicViewer
             this.Left = jsonComic.WindowX > 0 ? jsonComic.WindowX : this.Left;
             _fixedImageWidth = jsonComic.FixedImageWidth > 0 ? jsonComic.FixedImageWidth : _fixedImageWidth;
             _fixedImageRatio = jsonComic.FixedImageRatio > 0 ? jsonComic.FixedImageRatio : _fixedImageRatio;
+
+
 
             scrollUpdateInterval = jsonComic.ScrollUpdateInterval >= 0 ? jsonComic.ScrollUpdateInterval : scrollUpdateInterval;
             //Debug.WriteLine(jsonComic.List.Count);
@@ -349,13 +360,94 @@ namespace ComicViewer
 
         private void SetTitleText(String append)
         {
-            String fileName = _currentFile.Length > 100 ? _currentFile.Substring(0, 100) + "..." : _currentFile;
-            String pageName = _pages[_currentPage].Key.Length > 30 ?
-                "..." + _pages[_currentPage].Key.Substring(_pages[_currentPage].Key.Length - 30, 30) : _pages[_currentPage].Key;
-            String extension = System.IO.Path.GetExtension(_pages[_currentPage].Key).ToUpper().Replace(".", "");
+            string finalTitel = "";
+            int baseLength = 20;
 
-            TitleText.Text = fileName + " | " + pageName + " | " + extension + " | Page: " + (_currentPage + 1) + "/" + _pages.Count + append;
-            this.Title = fileName;
+            string finalFilename = "";
+
+            for (int i = 0; i < 20; i++)
+            {
+                int maxFileNameLength = baseLength + (i * 5);
+                String fileName = _currentFile;
+                bool isLong = fileName.Length > baseLength && !(fileName.Length <= maxFileNameLength);
+
+                String pageName = isLong ?
+                   fileName.Substring(0, Math.Min(fileName.Length, maxFileNameLength)).Replace(".zip", "").Trim() + "..." :
+                   fileName.Replace(".zip", "").Trim();
+
+
+                if (!isLong)
+                {
+                    finalFilename = pageName;
+                    break;
+                }
+                double width = MeasureString(pageName, TitleText).Width;
+                if (width > TitleBar.ActualWidth / 2)
+                {
+                    if (finalFilename == "")
+                    {
+                        finalFilename = pageName;
+                    }
+                    break;
+                }
+                else
+                {
+                    finalFilename = pageName;
+                }
+            }
+
+
+            for (int i = 0; i < 20; i++)
+            {
+                int maxFileNameLength = baseLength + (i * 5);
+                bool isLong = _pages[_currentPage].Key.Length > baseLength && !(_pages[_currentPage].Key.Length <= maxFileNameLength);
+
+                String pageName = isLong ?
+                    "..." + _pages[_currentPage].Key.Substring(Math.Max(0, _pages[_currentPage].Key.Length - maxFileNameLength)) :
+                    _pages[_currentPage].Key;
+
+                String extension = Path.GetExtension(_pages[_currentPage].Key).ToUpper().Replace(".", "");
+                String titleText = finalFilename + " | " + pageName + " | " + extension + " | Page: " + (_currentPage + 1) + "/" + _pages.Count + append;
+
+
+                if (!isLong)
+                {
+                    finalTitel = titleText;
+                    break;
+                }
+                if (MeasureString(titleText, TitleText).Width > (TitleBar.ActualWidth - (MinimizeButton.ActualHeight * 5)))
+                {
+                    if (finalTitel == "")
+                    {
+                        finalTitel = titleText;
+                    }
+                    break;
+                }
+                else
+                {
+                    finalTitel = titleText;
+                }
+
+            }
+            TitleText.Text = finalTitel;
+            this.Title = _currentFile;
+
+
+
+        }
+        private Size MeasureString(string candidate, TextBlock textBlock)
+        {
+            var formattedText = new FormattedText(
+                candidate,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface(textBlock.FontFamily, textBlock.FontStyle, textBlock.FontWeight, textBlock.FontStretch),
+                textBlock.FontSize,
+                Brushes.Black,
+                new NumberSubstitution(),
+                VisualTreeHelper.GetDpi(textBlock).PixelsPerDip);
+
+            return new Size(formattedText.Width, formattedText.Height);
         }
 
         public enum SizeUnits
@@ -381,6 +473,8 @@ namespace ComicViewer
             if (openFileDialog.ShowDialog() == true)
             {
                 OpenFile(openFileDialog.FileName);
+
+                //LoadArchive(openFileDialog.FileName);
             }
 
 
@@ -420,56 +514,128 @@ namespace ComicViewer
 
             _archive?.Dispose();
             _cache.Clear();
-            if (System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".7z"))
-            {
-                _archive = SharpCompress.Archives.SevenZip.SevenZipArchive.OpenArchive(filePath);
-            }
-            else if (System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".rar") || System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".cbr"))
-            {
-                _archive = SharpCompress.Archives.Rar.RarArchive.OpenArchive(filePath);
-            }
-            else
-            {
-                _archive = SharpCompress.Archives.Zip.ZipArchive.OpenArchive(filePath);
-            }
 
-            _pages = _archive.Entries.ToList()
-                .Where(entry =>
+            int test = 0;
+
+
+            bool clear = false;
+            while (!clear)
+            {
+                try
                 {
-                    string str = entry.Key.ToLower();
-                    if (
-                    (str.Contains(".jpg") ||
-                    str.Contains(".jpeg") ||
-                    str.Contains(".webp") ||
-                    str.Contains(".png") ||
-                    str.Contains(".jxl") ||
-                    str.Contains(".jxr") ||
-                    str.Contains(".tif") ||
-                    str.Contains(".avif") ||
-                    str.Contains(".gif"))
-                    //str.Contains(".webm") ||
-                    //str.Contains(".mkv") ||
-                    //str.Contains(".mp4")) 
-                    &&
-                    !(str.Contains("__macosx"))
-                    )
+                    ReaderOptions options = new ReaderOptions();
+                    //options.LeaveStreamOpen = true;
+                    //options.ArchiveEncoding = new SharpCompress.Common.ArchiveEncoding() { Default = System.Text.Encoding.UTF8 };
+                    options.LookForHeader = true;
+
+                    if (test == 1 || System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".7z"))
                     {
-                        return true;
+                        Log.add("Open 7z archive", false);
+
+                        _archive = SharpCompress.Archives.SevenZip.SevenZipArchive.OpenArchive(filePath, options);
+                    }
+                    else if (test == 2 || System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".rar") || System.IO.Path.GetExtension(filePath).ToLowerInvariant().Equals(".cbr"))
+                    {
+                        Log.add("Open rar archive", false);
+                        _archive = SharpCompress.Archives.Rar.RarArchive.OpenArchive(filePath, options);
                     }
                     else
                     {
-                        return false;
+                        _archive = SharpCompress.Archives.Zip.ZipArchive.OpenArchive(filePath, options);
+
+                    }
+
+
+
+                    //Log.add("Compression type: " + _archive.Compress, false);
+
+                    //_pages = _archive.Entries
+                    //    .Where(entry =>
+                    //    {
+                    //        string str = entry.Key.ToLower();
+                    //        if (
+                    //        (str.Contains(".jpg") ||
+                    //        str.Contains(".jpeg") ||
+                    //        str.Contains(".webp") ||
+                    //        str.Contains(".png") ||
+                    //        str.Contains(".jxl") ||
+                    //        str.Contains(".jxr") ||
+                    //        str.Contains(".tif") ||
+                    //        str.Contains(".avif") ||
+                    //        str.Contains(".gif"))
+                    //        //str.Contains(".webm") ||
+                    //        //str.Contains(".mkv") ||
+                    //        //str.Contains(".mp4")) 
+                    //        &&
+                    //        !(str.Contains("__macosx"))
+                    //        )
+                    //        {
+                    //            return true;
+                    //        }
+                    //        else
+                    //        {
+                    //            return false;
+                    //        }
+                    //    }
+                    //    )
+                    //    .OrderBy(entry => entry.Key, new NaturalSortComparer()) // Custom comparer for 1.jpg, 2.jpg, 10.jpg
+                    //    .ToList();
+
+                    clear = true;
+                }
+                catch (Exception ex)
+                {
+                    Log.add(ex.Message, true);
+                    Log.add(ex.StackTrace, true);
+                    test++;
+                    if (test > 3)
+                    {
+                        MessageBox.Show("Failed to open archive: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
                     }
                 }
-                )
-                .OrderBy(entry => entry.Key, new NaturalSortComparer()) // Custom comparer for 1.jpg, 2.jpg, 10.jpg
-                .ToList();
+            }
+
+
+            _pages = _archive.Entries.ToList()
+                  .Where(entry =>
+                  {
+                      string str = entry.Key.ToLower();
+                      if (
+                      (str.Contains(".jpg") ||
+                      str.Contains(".jpeg") ||
+                      str.Contains(".webp") ||
+                      str.Contains(".png") ||
+                      str.Contains(".jxl") ||
+                      str.Contains(".jxr") ||
+                      str.Contains(".tif") ||
+                      str.Contains(".avif") ||
+                      str.Contains(".gif"))
+                      //str.Contains(".webm") ||
+                      //str.Contains(".mkv") ||
+                      //str.Contains(".mp4")) 
+                      &&
+                      !(str.Contains("__macosx"))
+                      )
+                      {
+                          return true;
+                      }
+                      else
+                      {
+                          return false;
+                      }
+                  }
+                  )
+                  .OrderBy(entry => entry.Key, new NaturalSortComparer()) // Custom comparer for 1.jpg, 2.jpg, 10.jpg
+                  .ToList();
+
+
 
             Slider.Minimum = 0;
             Slider.Maximum = _pages.Count - 1;
 
             _currentPage = Math.Min(_currentComicItem.Pos, _pages.Count - 1);
-
+            _isFitWidth = !_currentComicItem.FitToWindow;
 
             if (_pages.Any()) {; DisplayPage(1, 0); }
             WindowFit(_currentComicItem.FitToWindow, false, 0, 0);
@@ -504,6 +670,7 @@ namespace ComicViewer
             if (gifThread != null && gifThread.IsAlive)
             {
                 gifThread.Interrupt();
+                ComicDisplay.Source = null;
             }
             if (_WebtoonStartPage == _currentPage)
             {
@@ -579,6 +746,10 @@ namespace ComicViewer
                 //{
                 //    _mediaPlayer.Stop();
                 //}
+                //var stream = _pages[_currentPage].OpenEntryStream();
+                //MemoryStream ms = new MemoryStream();
+                //stream.CopyTo(ms);
+                //ms.Position = 0;
 
                 BitmapSource imageToShow = null;
                 //RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.NearestNeighbor);
@@ -586,108 +757,91 @@ namespace ComicViewer
 
 
                 bool isAnimated = false;
-                if (_pages[_currentPage].Key.ToLower().Contains(".webp"))
+                //if (_pages[_currentPage].Key.ToLower().Contains(".webp"))
+                //{
+
+                //}
+                //else if (_pages[_currentPage].Key.ToLower().Contains(".gif"))
+                //{
+
+                //}
+
+                //if (_pages[_currentPage].Key.ToLower().Contains(".gif") && isAnimated)
+                //{
+                //    //using var stream = _pages[_currentPage].OpenEntryStream();
+                //    //using MemoryStream ms = new MemoryStream();
+                //    //stream.CopyTo(ms);
+
+                //    ms.Position = 0;
+                //    StartGifAnimation(ms);
+
+                //}
+                //else if (_pages[_currentPage].Key.ToLower().Contains(".webp") && isAnimated)
+                //{
+                //    //using var stream = _pages[_currentPage].OpenEntryStream();
+                //    //using MemoryStream ms = new MemoryStream();
+                //    //stream.CopyTo(ms);
+
+                //    ms.Position = 0;
+                //    StartWebpAnimation(ms);
+                //}
+                //else
+
+
+                if (_cache.TryGetValue(_currentPage, out ImageContainer cachedImage))
                 {
-                    try
-                    {
-                        MemoryStream ms = new MemoryStream();
-                        _pages[_currentPage].OpenEntryStream().CopyTo(ms);
-                        ms.Position = 0;
-                        IEnumerable<MetadataExtractor.Directory> directories = ImageMetadataReader.ReadMetadata(ms);
-                        foreach (var directory in directories)
-                            foreach (var item in directory.Tags)
-                            {
-                                if (item.Name.ToLower().Contains("animation") && item.Description.ToLower().Contains("true"))
-                                {
-                                    isAnimated = true;
-                                }
-                            }
-                    }
-                    catch
-                    {
+                    imageToShow = cachedImage.ResizedImage;
 
-                    }
-
-                }
-                else if (_pages[_currentPage].Key.ToLower().Contains(".gif"))
-                {
-                    MemoryStream ms = new MemoryStream();
-                    _pages[_currentPage].OpenEntryStream().CopyTo(ms);
-                    ms.Position = 0;
-                    IEnumerable<MetadataExtractor.Directory> directories = GifMetadataReader.ReadMetadata(ms);
-                    var directoriesImage = directories.Where(dir => dir.Name.ToLower().Contains("image")).ToList();
-
-                    if (directoriesImage.Count > 1)
-                    {
-                        isAnimated = true;
-                    }
-
-
-                    ms.Close();
-                }
-
-
-
-
-                if (_pages[_currentPage].Key.ToLower().Contains(".gif") && isAnimated)
-                {
-                    StartGifAnimation(_pages[_currentPage].OpenEntryStream());
-
-                }
-                else if (_pages[_currentPage].Key.ToLower().Contains(".webp") && isAnimated)
-                {
-                    StartWebpAnimation(_pages[_currentPage].OpenEntryStream());
                 }
                 else
                 {
 
+                    //using var stream = _pages[_currentPage].OpenEntryStream();
+                    //using MemoryStream ms = new MemoryStream();
+                    //stream.CopyTo(ms);
 
-                    if (_cache.TryGetValue(_currentPage, out ImageContainer cachedImage))
-                    {
-                        imageToShow = cachedImage.ResizedImage;
 
-                    }
-                    else
-                    {
-                        imageToShow = await LoadAndProcessImage(_currentPage, true);
-                        //System.Diagnostics.Debug.WriteLine("wwww " + _currentPage);
-                    }
-
-                    if (imageToShow != null)
-                    {
-                        if (!_IsWebtoon)
-                        {
-                            _WebtoonStartPage = -1;
-                            WindowFit(_currentComicItem.FitToWindow, false, imageToShow.Width, imageToShow.Height);
-                            ComicDisplay.Source = imageToShow;
-                            //ComicDisplay.Source.Freeze();
-                            if (_currentPage + 1 <= _pages.Count - 1 && pageDiff > 0)
-                            {
-                                LoadAndProcessImage(_currentPage + 1, false);
-                            }
-                            if (_currentPage - 1 >= 0 && pageDiff < 0)
-                            {
-                                LoadAndProcessImage(_currentPage - 1, false);
-                            }
-                        }
-                        else
-                        {
-                            WebtoonView(imageToShow);
-                        }
-
-                    }
-                    else
-                    {
-                        FileStream fileStream = new FileStream(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "error.png"), FileMode.Open, FileAccess.Read);
-
-                        var img = new System.Windows.Media.Imaging.BitmapImage();
-                        img.BeginInit();
-                        img.StreamSource = fileStream;
-                        img.EndInit();
-                        img.Freeze();
-                        ComicDisplay.Source = img;
-                    }
+                    imageToShow = await LoadAndProcessImage(_currentPage, true);
+                    //System.Diagnostics.Debug.WriteLine("wwww " + _currentPage);
                 }
+                //Log.add("" + imageToShow, false);
+                if (imageToShow != null)
+                {
+
+                    if (!_IsWebtoon)
+                    {
+                        _WebtoonStartPage = -1;
+                        WindowFit(_currentComicItem.FitToWindow, false, imageToShow.Width, imageToShow.Height);
+                        ComicDisplay.Source = imageToShow;
+                        //ComicDisplay.Source.Freeze();
+                        if (_currentPage + 1 <= _pages.Count - 1 && pageDiff > 0)
+                        {
+                            LoadAndProcessImage(_currentPage + 1, false);
+                        }
+                        if (_currentPage - 1 >= 0 && pageDiff < 0)
+                        {
+                            LoadAndProcessImage(_currentPage - 1, false);
+                        }
+                    }
+                    else
+                    {
+                        WebtoonView(imageToShow);
+                    }
+
+                }
+
+                else if (gifImg == null)
+                {
+                    FileStream fileStream = new FileStream(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "error.png"), FileMode.Open, FileAccess.Read);
+
+                    var img = new System.Windows.Media.Imaging.BitmapImage();
+                    img.BeginInit();
+                    img.StreamSource = fileStream;
+                    img.EndInit();
+                    img.Freeze();
+                    ComicDisplay.Source = img;
+                }
+
 
                 UpdateInfo(imageToShow);
 
@@ -787,6 +941,35 @@ namespace ComicViewer
             th1.Start();
         }
 
+        public bool isAnimatedGif(MemoryStream ms)
+        {
+            bool isAnimated = false;
+            ms.Position = 0;
+            IEnumerable<MetadataExtractor.Directory> directories = GifMetadataReader.ReadMetadata(ms);
+            var directoriesImage = directories.Where(dir => dir.Name.ToLower().Contains("image")).ToList();
+            Log.add("Gif frame count: " + directoriesImage.Count, false);
+            if (directoriesImage.Count > 1)
+            {
+                isAnimated = true;
+            }
+            return isAnimated;
+        }
+        public bool isAnimatedWebp(MemoryStream ms)
+        {
+            bool isAnimated = false;
+            ms.Position = 0;
+            IEnumerable<MetadataExtractor.Directory> directories = WebPMetadataReader.ReadMetadata(ms);
+            foreach (var directory in directories)
+                foreach (var item in directory.Tags)
+                {
+                    //Log.add("WebP Metadata: " + item.Name + " = " + item.Description, false);
+                    if (item.Name.ToLower().Contains("animation") && item.Description.ToLower().Contains("true"))
+                    {
+                        isAnimated = true;
+                    }
+                }
+            return isAnimated;
+        }
         private void UpdateKeyScroll()
         {
             Thread th1 = (new Thread(() =>
@@ -922,60 +1105,63 @@ namespace ComicViewer
         //    _mediaPlayer.Media = _media;
         //}
 
-        public static List<(BitmapSource Bitmap, int Delay)> ExtractWebPFrames(Stream webpStream)
+
+        public static BitmapSource ExtractWebPFrame(byte[] webpBytes, int frameIndex)
         {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
 
-            byte[] webpBytes;
-            using (var ms = new MemoryStream())
-            {
-                webpStream.CopyTo(ms);
-                webpBytes = ms.ToArray();
-            }
+            var vipsImage = Image.WebploadBuffer(webpBytes, page: frameIndex, n: 1);
 
-            var vipsImage = global::NetVips.Image.WebploadBuffer(webpBytes, n: -1);
-
-            int frameCount = (int)vipsImage.Get("n-pages");
-            int pageHeight = (int)vipsImage.Get("page-height");
+            //int frameCount = (int)vipsImage.Get("n-pages");
+            //int pageHeight = (int)vipsImage.Get("page-height");
             int canvasWidth = vipsImage.Width;
-            int[] delays = (int[])vipsImage.Get("delay");
+            int canvasHeight = vipsImage.Height;
+
+
 
             // Pre-allocate fixed-size array so parallel writes are safe
-            var result = new (BitmapSource Bitmap, int Delay)[frameCount];
+            //var result = new (BitmapSource Bitmap, int Delay)[frameCount];
 
-            Parallel.For(0, frameCount, i =>
-            {
-                // Each iteration gets its own vips image slice — thread safe
-                var frame = vipsImage.ExtractArea(0, i * pageHeight, canvasWidth, pageHeight);
 
-                if (frame.Bands < 4)
-                    frame = frame.Bandjoin(255);
 
-                // Swap to BGRA in one operation using a LUT instead of band-by-band
-                var reordered = frame.ExtractBand(2)
-                                     .Bandjoin(new[] { frame.ExtractBand(1),
-                                               frame.ExtractBand(0),
-                                               frame.ExtractBand(3) });
+            //using var frame = vipsImage.Crop(0, frameIndex * pageHeight, canvasWidth, pageHeight);
 
-                byte[] pixels = reordered.WriteToMemory<byte>();
-                int stride = canvasWidth * 4;
-                int delay = delays != null && i < delays.Length ? Math.Max(delays[i], 20) : 100;
 
-                // BitmapSource.Create is thread safe as long as we Freeze immediately
-                var bitmap = BitmapSource.Create(canvasWidth, pageHeight, 96, 96,
-                                                 System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
-                bitmap.Freeze();
 
-                result[i] = (bitmap, delay);
-            });
+            if (vipsImage.Bands < 4)
+                vipsImage = vipsImage.Bandjoin(255);
 
-            return result.ToList();
+            // Swap to BGRA in one operation using a LUT instead of band-by-band
+            vipsImage = vipsImage.ExtractBand(2)
+                                  .Bandjoin(new[] { vipsImage.ExtractBand(1),
+                                               vipsImage.ExtractBand(0),
+                                               vipsImage.ExtractBand(3) });
+
+            //byte[] pixels = frame.PngsaveBuffer();
+            byte[] pixels = vipsImage.WriteToMemory<byte>();
+
+            int stride = canvasWidth * 4;
+            //int delay = delays != null && frameIndex < delays.Length ? Math.Max(delays[frameIndex], 20) : 100;
+
+            // BitmapSource.Create is thread safe as long as we Freeze immediately
+            //var bitmap = BitmapFrame.Create(new System.IO.MemoryStream(pixels));
+            var bitmap = BitmapSource.Create(canvasWidth, canvasHeight, 96, 96,
+                                             System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
+
+            vipsImage.Dispose();
+
+            Log.add("ExtractWebPFrame: " + sw.ElapsedMilliseconds + " ms", false);
+
+            return (bitmap);
         }
-        public void StartGifAnimation(Stream gifStream)
+        public void StartGifAnimation(MemoryStream ms)
         {
-            MemoryStream ms = new MemoryStream();
-            gifStream.CopyTo(ms);
+            //using var stream = _pages[_currentPage].OpenEntryStream();
+            //using MemoryStream ms = new MemoryStream();
+            //stream.CopyTo(ms);
             ms.Position = 0;
-
+            //ms.Position = 0;
             var decoder = new GifBitmapDecoder(
                 ms,
                 BitmapCreateOptions.PreservePixelFormat,
@@ -1007,6 +1193,8 @@ namespace ComicViewer
                 framesControl.Add((Int32.Parse(directory.GetString(1)), restore));
             }
 
+            //Log.add("" + framesList.Count, false);
+            image.Freeze();
             gifImg = image;
             if (gifThread != null && gifThread.IsAlive)
             {
@@ -1062,48 +1250,65 @@ namespace ComicViewer
             });
 
             gifThread.Start();
+
         }
 
-        public void StartWebpAnimation(Stream webpStream)
+        public void StartWebpAnimation(MemoryStream ms)
         {
-            List<(BitmapSource Bitmap, int Delay)> frames = ExtractWebPFrames(webpStream);
+
+            ms.Position = 0;
+            byte[] webpBytes;
+
+            webpBytes = ms.ToArray();
 
 
-            int frameIndex = 0;
-            BitmapSource image = frames[0].Bitmap;
+            var decoder = new AnimDecoder(webpBytes, true);
+
+
+            AnimFrame frame = decoder.GetNextFrame();
+            BitmapSource imageOut = BitmapSource.Create(frame.Width, frame.Height, 96, 96,
+                                  System.Windows.Media.PixelFormats.Bgra32, null, frame.Pixels, 4 * frame.Width);
+            imageOut.Freeze();
+            gifImg = imageOut;
+
             if (gifThread != null && gifThread.IsAlive)
             {
                 gifThread.Interrupt();
             }
 
-            gifImg = image;
             gifThread = new Thread(() =>
             {
                 try
                 {
+
+
+                    int frameCount = decoder.Info.FrameCount;
+                    List<AnimFrame> frames = decoder.DecodeAllFrames();
                     while (true)
                     {
-                        if (!_isFocused)
-                        {
-                            Thread.Sleep(100);
-                            continue;
-                        }
+                        int frameIndex = 0;
 
-                        image = frames[frameIndex].Bitmap;
-                        image.Freeze(); // Freeze for cross-thread access
-                        this.Dispatcher.Invoke(new Action(() =>
+                        //while (decoder.HasMoreFrames())
+                        //{
+                        //    AnimFrame frame = decoder.GetNextFrame();
+                        foreach (var frame in frames)
                         {
-                            ComicDisplay.Source = image;
-                            try
+                            BitmapSource image = BitmapSource.Create(frame.Width, frame.Height, 96, 96,
+                                            System.Windows.Media.PixelFormats.Bgra32, null, frame.Pixels, 4 * frame.Width);
+                            image.Freeze();
+                            this.Dispatcher.Invoke(new Action(() =>
                             {
-                                SetTitleText(" | Frame: " + (frameIndex + 1) + "/" + frames.Count);
-                            }
-                            catch { }
-                        }), DispatcherPriority.Send);
+                                ComicDisplay.Source = image;
+                                try
+                                {
+                                    SetTitleText(" | Frame: " + (frameIndex++ + 1) + "/" + frameCount);
+                                }
+                                catch { }
+                            }), DispatcherPriority.Send);
 
-                        Thread.Sleep(frames[frameIndex].Delay);
+                            Thread.Sleep(frame.DurationMs);
 
-                        frameIndex = (frameIndex + 1) % frames.Count;
+                        }
                     }
                 }
                 catch (Exception exception)
@@ -1114,7 +1319,11 @@ namespace ComicViewer
 
             });
 
+
+
+            decoder.Reset();
             gifThread.Start();
+
         }
 
         public BitmapFrame OverlayBitmapFrames(BitmapFrame background, BitmapFrame overlay, int x, int y, bool restore)
@@ -1185,7 +1394,7 @@ namespace ComicViewer
                 {
                     dimensionStr = dimensionOriginal + " (" + Math.Round(((double)currentImage.ResizedImage.PixelWidth) / ((double)currentImage.OriginalWidth), 2) + ": " + dimensionResized + ")";
                 }
-                dimensionStr += String.Format(" (View: {0}x{1})", MainScroll.ViewportWidth, MainScroll.ViewportHeight);
+                dimensionStr += String.Format(" (View: {0}x{1}, fit:{2})", MainScroll.ViewportWidth, MainScroll.ViewportHeight, _isFitWidth);
                 //    " (View: " + MainScroll.ViewportWidth + "x" + MainScroll.ViewportHeight + ")";
 
                 size = String.Format("{0} MB, Load: {1} ms, Read: {2} ms, Resize: {3} ms", ToSize(_pages[_currentPage].Size, SizeUnits.MB), _loadTimeMs, VipsImageFactory.imageLoad, VipsImageFactory.imageResize);
@@ -1193,7 +1402,16 @@ namespace ComicViewer
                 string strResized = currentImage.ResizedImage != null ? "Resized" : "Original";
                 string cachedStr = "";
 
-
+                if (gifImg == null)
+                    if (((int)MainScroll.ViewportWidth != currentImage.ResizedImage.PixelWidth && !_isFitWidth && !_fixedScale && (int)MainScroll.ViewportHeight > currentImage.ResizedImage.PixelHeight) ||
+                        ((int)MainScroll.ViewportWidth != currentImage.ResizedImage.PixelWidth && _isFitWidth && !_fixedScale)
+                        )
+                    {
+                        _cache.Clear();
+                        //WindowFit(_isFitWidth, true, 0, 0);
+                        DisplayPage(0, 22);
+                        Log.add("err", false);
+                    }
 
                 for (int i = 0; i < _cache.Keys.ToList().Count; i++)
                 {
@@ -1244,17 +1462,24 @@ namespace ComicViewer
                 sw.Start();
                 BitmapSource imageToShow = null;
 
-                var stream = _pages[index].OpenEntryStream();
-                var ms = new MemoryStream();
+                //using var stream = _pages[index].OpenEntryStream();
+                //using MemoryStream ms = new MemoryStream();
+                //stream.CopyTo(ms);
+                //ms.Position = 0;
+                //byte[] imageBytes = ms.ToArray();
+
+                //Thread.Sleep(1000);
+
                 int OWidth = 0;
                 int OHeight = 0;
-                Debug.WriteLine(_pages[index].Key);
+                //Debug.WriteLine(_pages[index].Key);
+
+
+                //Log.add("Compression type: " + _pages[index].IsSolid, false);
 
                 try
                 {
-                    stream.CopyTo(ms);
-                    ms.Position = 0;
-
+                    //stream.Position = 0;
                     if (_pages[index].Key.ToLower().Contains(".png") ||
                     _pages[index].Key.ToLower().Contains(".jpg") ||
                     _pages[index].Key.ToLower().Contains(".jpeg") ||
@@ -1267,15 +1492,49 @@ namespace ComicViewer
                     _pages[index].Key.ToLower().Contains(".avif")
                    )
                     {
-                        BitmapSource bs;
-                        ProcessImage(index, ms, out OWidth, out OHeight, out bs, isCurrentPage);
-                        imageToShow = bs;
+
+                        using var stream = _pages[index].OpenEntryStream();
+                        using var ms = new MemoryStream();
+                        stream.CopyTo(ms);
+                        //byte[] imageBytes = ms.ToArray();
+                        bool isAni = false;
+                        if (_pages[index].Key.ToLower().Contains(".webp"))
+                        {
+                            isAni = isAnimatedWebp(ms);
+                            if (isAni && isCurrentPage)
+                            {
+                                StartWebpAnimation(ms);
+                            }
+                        }
+                        else if (_pages[index].Key.ToLower().Contains(".gif"))
+                        {
+                            isAni = isAnimatedGif(ms);
+                            if (isAni && isCurrentPage)
+                            {
+                                StartGifAnimation(ms);
+                            }
+                        }
+
+
+                        if (!isAni)
+                        {
+                            ms.Position = 0;
+                            BitmapSource bs;
+                            ProcessImage(index, ms, out OWidth, out OHeight, out bs, isCurrentPage);
+                            imageToShow = bs;
+                        }
+                        else
+                        {
+                            _cache.Clear();
+                        }
+
                     }
                     else
                     {
                         Log.add("Error image read", true);
                     }
                 }
+
                 catch (Exception ex)
                 {
                     Log.add(_pages[index].Key, true);
@@ -1285,13 +1544,13 @@ namespace ComicViewer
                 }
                 finally
                 {
-                    if (!_IsWebtoon)
+                    if (!_IsWebtoon && imageToShow != null)
                     {
                         _cache.TryAdd(index, new ImageContainer(imageToShow, OWidth, OHeight));
                     }
                     sw.Stop();
                     _loadTimeMs = (int)sw.Elapsed.TotalMilliseconds;
-                    ms.Close();
+                    //ms.Close();
                 }
                 this.Dispatcher.Invoke(new Action(() =>
                 {
@@ -1306,6 +1565,7 @@ namespace ComicViewer
                     System.GC.Collect();
                 }));
                 semImg.Release();
+                //Log.add(imageToShow.Width + "", false);
 
                 return imageToShow;
             });
@@ -1315,9 +1575,10 @@ namespace ComicViewer
         {
             //Stopwatch sw = new Stopwatch();
             //sw.Start();
+            ms.Position = 0;
             (OWidth, OHeight) = ImageDimensionReader.Read(ms);
             //sw.Stop();
-            //Log.add("ImageDimensionReader.Read: " + sw.ElapsedMilliseconds + " ms", false);
+
 
             ms.Position = 0;
 
@@ -1331,6 +1592,10 @@ namespace ComicViewer
 
             int newWidth = (int)viewWidth;
             int newHeight = (int)Math.Round(OHeight / ratioWidth);
+
+            //Log.add(OWidth + "x" + OHeight, false);
+            //Log.add("fit: " + _isFitWidth, false);
+
 
             if (!_isFitWidth)
             {
@@ -1376,20 +1641,19 @@ namespace ComicViewer
             {
                 double diffRatio = (double)newWidth / (double)OWidth;
 
-                ms.Position = 0;
                 if (diffRatio >= 1.6)
                 {
-                    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Lanczos, false);
+                    MagicScaler(index, (ms.ToArray()), out bs, newWidth, newHeight, InterpolationSettings.Lanczos, false);
                     CheckScaling(ScalingUltraSharp, isCurrentPage);
                 }
                 else if (diffRatio >= 1.3)
                 {
-                    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
+                    MagicScaler(index, (ms.ToArray()), out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                     CheckScaling(ScalingCatRom, isCurrentPage);
                 }
                 else if (diffRatio >= 1.12)
                 {
-                    using (var img = GetVipsImg(index, ms))
+                    using (var img = GetVipsImg(index, ms.ToArray()))
                     {
                         bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, 0, newWidth, newHeight, 2);
                         CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
@@ -1397,7 +1661,7 @@ namespace ComicViewer
                 }
                 else if (diffRatio >= 0.85)
                 {
-                    using (var img = GetVipsImg(index, ms))
+                    using (var img = GetVipsImg(index, ms.ToArray()))
                     {
                         bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, 0, newWidth, newHeight, 1);
                         CheckScaling(ScalingLanczos3Sharp, isCurrentPage);
@@ -1415,7 +1679,7 @@ namespace ComicViewer
                 //}
                 else if (diffRatio >= 0.7)
                 {
-                    using (var img = GetVipsImg(index, ms))
+                    using (var img = GetVipsImg(index, ms.ToArray()))
                     {
                         bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos3, 0, newWidth, newHeight, 0);
 
@@ -1425,7 +1689,7 @@ namespace ComicViewer
                 }
                 else
                 {
-                    using (var img = GetVipsImg(index, ms))
+                    using (var img = GetVipsImg(index, ms.ToArray()))
                     {
                         bs = VipsImageFactory.Scale(img, Scalers.VipsLanczos2, 0, newWidth, newHeight, 0);
                         CheckScaling(ScalingLanczos2, isCurrentPage);
@@ -1441,23 +1705,23 @@ namespace ComicViewer
             {
                 if (scalingAlgo == Scalers.MagicUltraSharp)
                 {
-                    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Lanczos, false);
+                    MagicScaler(index, ms.ToArray(), out bs, newWidth, newHeight, InterpolationSettings.Lanczos, false);
                 }
                 else if (scalingAlgo == Scalers.MagicMitchell)
                 {
-                    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Mitchell, false);
+                    MagicScaler(index, ms.ToArray(), out bs, newWidth, newHeight, InterpolationSettings.Mitchell, false);
                 }
                 else if (scalingAlgo == Scalers.MagicHermite)
                 {
-                    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Hermite, false);
+                    MagicScaler(index, ms.ToArray(), out bs, newWidth, newHeight, InterpolationSettings.Hermite, false);
                 }
                 else if (scalingAlgo == Scalers.MagicCatRom)
                 {
-                    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
+                    MagicScaler(index, ms.ToArray(), out bs, newWidth, newHeight, InterpolationSettings.CatmullRom, false);
                 }
                 else if (scalingAlgo == Scalers.MagicUltraSharpLinear)
                 {
-                    MagicScaler(index, ms, out bs, newWidth, newHeight, InterpolationSettings.Lanczos, true);
+                    MagicScaler(index, ms.ToArray(), out bs, newWidth, newHeight, InterpolationSettings.Lanczos, true);
                 }
                 else
                 {
@@ -1487,7 +1751,7 @@ namespace ComicViewer
 
 
 
-                    using (var img = GetVipsImg(index, ms))
+                    using (var img = GetVipsImg(index, ms.ToArray()))
                     {
                         bs = VipsImageFactory.Scale(img, scalingAlgo, aiScale, newWidth, newHeight, sharpenLevel);
                     }
@@ -1501,7 +1765,7 @@ namespace ComicViewer
 
             //Debug.WriteLine((System.Windows.SystemParameters.PrimaryScreenWidth * 1.2) + " : " + newWidth + " : " + _scalingAlgo + ":" + ratioWidth);
 
-            ms.Close();
+            //ms.Close();
 
 
             //bs = VipsImageFactory.Scale(img, FilterType.SincFast, newWidth, newHeight, true);
@@ -1522,26 +1786,30 @@ namespace ComicViewer
             });
         }
 
-        private Image GetVipsImg(int index, MemoryStream ms)
+        private Image GetVipsImg(int index, byte[] imageBytes)
         {
             Image img = null;
             if (_pages[index].Key.ToLower().Contains(".jxl"))
             {
-                img = VipsImageFactory.FromJxl(ms.ToArray());
+                img = VipsImageFactory.FromJxl(imageBytes);
             }
             else if (_pages[index].Key.ToLower().Contains(".jxr"))
             {
-                img = VipsImageFactory.FromJxr(ms.ToArray());
+                img = VipsImageFactory.FromJxr(imageBytes);
+            }
+            else if (_pages[index].Key.ToLower().Contains(".avif"))
+            {
+                img = VipsImageFactory.FromAVIF(imageBytes);
             }
             else
             {
-                img = VipsImageFactory.FromBuffer(ms.ToArray());
+                img = VipsImageFactory.FromBuffer(imageBytes);
             }
 
             return img;
         }
 
-        private void MagicScaler(int index, MemoryStream ms, out BitmapSource bs, int width, int height, InterpolationSettings interpolation, bool linear)
+        private void MagicScaler(int index, byte[] imageBytes, out BitmapSource bs, int width, int height, InterpolationSettings interpolation, bool linear)
         {
             ////MagicScaler(index, ms, out bs, out width, out height);
             MagicImageFormat fmt = MagicImageFormat.Jpeg;
@@ -1552,6 +1820,10 @@ namespace ComicViewer
             else if (_pages[index].Key.ToLower().Contains(".jxr"))
             {
                 fmt = MagicImageFormat.Jxr;
+            }
+            else if (_pages[index].Key.ToLower().Contains(".avif"))
+            {
+                fmt = MagicImageFormat.AVIF;
             }
             else
             {
@@ -1571,7 +1843,7 @@ namespace ComicViewer
             //}
             int OWidth = 0;
             int OHeight = 0;
-            (bs, OWidth, OHeight) = MagicScalerImageFactory.Scale(interpolation, ms.ToArray(), fmt,
+            (bs, OWidth, OHeight) = MagicScalerImageFactory.Scale(interpolation, imageBytes, fmt,
                  width, height, true, linear);
         }
         private void SetFitWindow(object sender, RoutedEventArgs e)
@@ -2641,9 +2913,6 @@ namespace ComicViewer
                 {
                     if (File.Exists(path))
                     {
-                        //LoadArchive(path);
-                        //String run = "explorer.exe /select, " + "\"" + _currentFilePath + "\"";
-
                         OpenFile(path);
 
                     }

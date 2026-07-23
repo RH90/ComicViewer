@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.VisualBasic.Logging;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -148,6 +149,7 @@ namespace ComicViewer
 
 
 
+
         // ── Win32 helpers ─────────────────────────────────────────────────────
 
         [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true)]
@@ -193,155 +195,155 @@ namespace ComicViewer
         /// <summary>
         /// Decodes a JPEG XL byte array and returns a freeze-able WPF BitmapImage.
         /// </summary>
-        public static BitmapImage Decode(
-            byte[] jxlData,
-            JxlDecodeOptions? options = null)
-        {
-            if (jxlData is null || jxlData.Length == 0)
-                throw new ArgumentNullException(nameof(jxlData));
+        //public static BitmapImage Decode(
+        //    byte[] jxlData,
+        //    JxlDecodeOptions? options = null)
+        //{
+        //    if (jxlData is null || jxlData.Length == 0)
+        //        throw new ArgumentNullException(nameof(jxlData));
 
-            return ConvertToBitmapImage(
-                DecodeInternal(jxlData, options ?? JxlDecodeOptions.Default));
-        }
+        //    return ConvertToBitmapImage(
+        //        DecodeInternal(jxlData, options ?? JxlDecodeOptions.Default));
+        //}
 
         /// <summary>
         /// Decodes a JPEG XL byte array and returns a BitmapSource.
         /// More efficient when BitmapSource suffices for display.
         /// </summary>
-        public static BitmapSource DecodeAsBitmapSource(
-            byte[] jxlData,
-            JxlDecodeOptions? options = null)
-        {
-            if (jxlData is null || jxlData.Length == 0)
-                throw new ArgumentNullException(nameof(jxlData));
+        //public static BitmapSource DecodeAsBitmapSource(
+        //    byte[] jxlData,
+        //    JxlDecodeOptions? options = null)
+        //{
+        //    if (jxlData is null || jxlData.Length == 0)
+        //        throw new ArgumentNullException(nameof(jxlData));
 
-            return DecodeInternal(jxlData, options ?? JxlDecodeOptions.Default);
-        }
+        //    return DecodeInternal(jxlData, options ?? JxlDecodeOptions.Default);
+        //}
 
-        // ── Core decode ───────────────────────────────────────────────────────
+        //// ── Core decode ───────────────────────────────────────────────────────
 
-        private static BitmapSource DecodeInternal(byte[] jxlData, JxlDecodeOptions opts)
-        {
-            IntPtr dec = JxlDecoderCreate(IntPtr.Zero);
-            IntPtr runner = IntPtr.Zero;
+        //private static BitmapSource DecodeInternal(byte[] jxlData, JxlDecodeOptions opts)
+        //{
+        //    IntPtr dec = JxlDecoderCreate(IntPtr.Zero);
+        //    IntPtr runner = IntPtr.Zero;
 
-            if (dec == IntPtr.Zero)
-                throw new InvalidOperationException("JxlDecoderCreate returned null.");
+        //    if (dec == IntPtr.Zero)
+        //        throw new InvalidOperationException("JxlDecoderCreate returned null.");
 
-            try
-            {
-                // 1. Parallel runner (raw native fn ptr via GetProcAddress)
-                int threadCount = opts.Threads <= 0
-                    ? Environment.ProcessorCount
-                    : opts.Threads;
+        //    try
+        //    {
+        //        // 1. Parallel runner (raw native fn ptr via GetProcAddress)
+        //        int threadCount = opts.Threads <= 0
+        //            ? Environment.ProcessorCount
+        //            : opts.Threads;
 
-                if (threadCount > 1)
-                {
-                    runner = JxlThreadParallelRunnerCreate(IntPtr.Zero, (nuint)threadCount);
-                    if (runner == IntPtr.Zero)
-                        throw new InvalidOperationException(
-                            "JxlThreadParallelRunnerCreate returned null.");
+        //        if (threadCount > 1)
+        //        {
+        //            runner = JxlThreadParallelRunnerCreate(IntPtr.Zero, (nuint)threadCount);
+        //            if (runner == IntPtr.Zero)
+        //                throw new InvalidOperationException(
+        //                    "JxlThreadParallelRunnerCreate returned null.");
 
-                    if (JxlDecoderSetParallelRunner(dec, s_threadRunnerFnPtr.Value, runner)
-                            != JXL_DEC_SUCCESS)
-                        throw new InvalidOperationException(
-                            "JxlDecoderSetParallelRunner failed.");
-                }
+        //            if (JxlDecoderSetParallelRunner(dec, s_threadRunnerFnPtr.Value, runner)
+        //                    != JXL_DEC_SUCCESS)
+        //                throw new InvalidOperationException(
+        //                    "JxlDecoderSetParallelRunner failed.");
+        //        }
 
-                // 2. Skip orientation (optional)
-                if (opts.SkipOrientation)
-                    if (JxlDecoderSetKeepOrientation(dec, JXL_TRUE) != JXL_DEC_SUCCESS)
-                        throw new InvalidOperationException(
-                            "JxlDecoderSetKeepOrientation failed.");
+        //        // 2. Skip orientation (optional)
+        //        if (opts.SkipOrientation)
+        //            if (JxlDecoderSetKeepOrientation(dec, JXL_TRUE) != JXL_DEC_SUCCESS)
+        //                throw new InvalidOperationException(
+        //                    "JxlDecoderSetKeepOrientation failed.");
 
-                // 3. Subscribe to events
-                if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE)
-                        != JXL_DEC_SUCCESS)
-                    throw new InvalidOperationException("JxlDecoderSubscribeEvents failed.");
+        //        // 3. Subscribe to events
+        //        if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE)
+        //                != JXL_DEC_SUCCESS)
+        //            throw new InvalidOperationException("JxlDecoderSubscribeEvents failed.");
 
-                // 4. Feed data
-                if (JxlDecoderSetInput(dec, jxlData, (nuint)jxlData.Length) != JXL_DEC_SUCCESS)
-                    throw new InvalidOperationException("JxlDecoderSetInput failed.");
-                JxlDecoderCloseInput(dec);
+        //        // 4. Feed data
+        //        if (JxlDecoderSetInput(dec, jxlData, (nuint)jxlData.Length) != JXL_DEC_SUCCESS)
+        //            throw new InvalidOperationException("JxlDecoderSetInput failed.");
+        //        JxlDecoderCloseInput(dec);
 
-                // 5. Event loop
-                JxlBasicInfo info = default;
-                bool hasInfo = false;
-                byte[]? pixels = null;
-                uint width = 0;
-                uint height = 0;
-                bool hasAlpha = false;
+        //        // 5. Event loop
+        //        JxlBasicInfo info = default;
+        //        bool hasInfo = false;
+        //        byte[]? pixels = null;
+        //        uint width = 0;
+        //        uint height = 0;
+        //        bool hasAlpha = false;
 
-                while (true)
-                {
-                    int status = JxlDecoderProcessInput(dec);
-                    switch (status)
-                    {
-                        case JXL_DEC_BASIC_INFO:
-                            if (JxlDecoderGetBasicInfo(dec, out info) != JXL_DEC_SUCCESS)
-                                throw new InvalidOperationException("JxlDecoderGetBasicInfo failed.");
-                            hasInfo = true;
-                            width = info.xsize;
-                            height = info.ysize;
-                            hasAlpha = info.alpha_bits > 0;
-                            break;
+        //        while (true)
+        //        {
+        //            int status = JxlDecoderProcessInput(dec);
+        //            switch (status)
+        //            {
+        //                case JXL_DEC_BASIC_INFO:
+        //                    if (JxlDecoderGetBasicInfo(dec, out info) != JXL_DEC_SUCCESS)
+        //                        throw new InvalidOperationException("JxlDecoderGetBasicInfo failed.");
+        //                    hasInfo = true;
+        //                    width = info.xsize;
+        //                    height = info.ysize;
+        //                    hasAlpha = info.alpha_bits > 0;
+        //                    break;
 
-                        case JXL_DEC_NEED_IMAGE_OUT_BUFFER:
-                            if (!hasInfo)
-                                throw new InvalidOperationException(
-                                    "NEED_IMAGE_OUT_BUFFER received before BASIC_INFO.");
-                            {
-                                uint ch = hasAlpha ? 4u : 3u;
-                                var fmt = MakePixelFormat(ch);
-                                nuint sz;
-                                if (JxlDecoderImageOutBufferSize(dec, ref fmt, out sz) != JXL_DEC_SUCCESS)
-                                    throw new InvalidOperationException("JxlDecoderImageOutBufferSize failed.");
-                                pixels = new byte[(int)sz];
-                                if (JxlDecoderSetImageOutBuffer(dec, ref fmt, pixels, sz) != JXL_DEC_SUCCESS)
-                                    throw new InvalidOperationException("JxlDecoderSetImageOutBuffer failed.");
-                            }
-                            break;
+        //                case JXL_DEC_NEED_IMAGE_OUT_BUFFER:
+        //                    if (!hasInfo)
+        //                        throw new InvalidOperationException(
+        //                            "NEED_IMAGE_OUT_BUFFER received before BASIC_INFO.");
+        //                    {
+        //                        uint ch = hasAlpha ? 4u : 3u;
+        //                        var fmt = MakePixelFormat(ch);
+        //                        nuint sz;
+        //                        if (JxlDecoderImageOutBufferSize(dec, ref fmt, out sz) != JXL_DEC_SUCCESS)
+        //                            throw new InvalidOperationException("JxlDecoderImageOutBufferSize failed.");
+        //                        pixels = new byte[(int)sz];
+        //                        if (JxlDecoderSetImageOutBuffer(dec, ref fmt, pixels, sz) != JXL_DEC_SUCCESS)
+        //                            throw new InvalidOperationException("JxlDecoderSetImageOutBuffer failed.");
+        //                    }
+        //                    break;
 
-                        case JXL_DEC_FULL_IMAGE:
-                            break;
+        //                case JXL_DEC_FULL_IMAGE:
+        //                    break;
 
-                        case JXL_DEC_SUCCESS:
-                            goto Done;
+        //                case JXL_DEC_SUCCESS:
+        //                    goto Done;
 
-                        case JXL_DEC_NEED_MORE_INPUT:
-                            throw new InvalidOperationException(
-                                "Decoder needs more input even though the entire file was supplied.");
+        //                case JXL_DEC_NEED_MORE_INPUT:
+        //                    throw new InvalidOperationException(
+        //                        "Decoder needs more input even though the entire file was supplied.");
 
-                        case JXL_DEC_ERROR:
-                            throw new InvalidOperationException(
-                                "libjxl reported JXL_DEC_ERROR.");
+        //                case JXL_DEC_ERROR:
+        //                    throw new InvalidOperationException(
+        //                        "libjxl reported JXL_DEC_ERROR.");
 
-                        default:
-                            break;
-                    }
-                }
+        //                default:
+        //                    break;
+        //            }
+        //        }
 
-            Done:
-                if (pixels is null)
-                    throw new InvalidOperationException("No pixel data captured.");
+        //    Done:
+        //        if (pixels is null)
+        //            throw new InvalidOperationException("No pixel data captured.");
 
-                // 6. Build WPF BitmapSource  (libjxl: RGB(A)  →  WPF: BGR(A))
-                int stride;
-                PixelFormat fmt2;
-                if (hasAlpha) { stride = (int)width * 4; fmt2 = PixelFormats.Bgra32; SwapRedBlue(pixels, 4); }
-                else { stride = (int)width * 3; fmt2 = PixelFormats.Bgr24; SwapRedBlue(pixels, 3); }
+        //        // 6. Build WPF BitmapSource  (libjxl: RGB(A)  →  WPF: BGR(A))
+        //        int stride;
+        //        PixelFormat fmt2;
+        //        if (hasAlpha) { stride = (int)width * 4; fmt2 = PixelFormats.Bgra32; SwapRedBlue(pixels, 4); }
+        //        else { stride = (int)width * 3; fmt2 = PixelFormats.Bgr24; SwapRedBlue(pixels, 3); }
 
 
 
-                return BitmapSource.Create((int)width, (int)height, 96, 96, fmt2, null, pixels, stride);
-            }
-            finally
-            {
-                JxlDecoderDestroy(dec);
-                if (runner != IntPtr.Zero)
-                    JxlThreadParallelRunnerDestroy(runner);
-            }
-        }
+        //        return BitmapSource.Create((int)width, (int)height, 96, 96, fmt2, null, pixels, stride);
+        //    }
+        //    finally
+        //    {
+        //        JxlDecoderDestroy(dec);
+        //        if (runner != IntPtr.Zero)
+        //            JxlThreadParallelRunnerDestroy(runner);
+        //    }
+        //}
         public static (byte[], uint, uint, bool) DecodeInternalRaw(byte[] jxlData, JxlDecodeOptions opts)
         {
             IntPtr dec = JxlDecoderCreate(IntPtr.Zero);
@@ -356,7 +358,7 @@ namespace ComicViewer
                 int threadCount = opts.Threads <= 0
                     ? Environment.ProcessorCount
                     : opts.Threads;
-
+                //threadCount = 2;
                 if (threadCount > 1)
                 {
                     runner = JxlThreadParallelRunnerCreate(IntPtr.Zero, (nuint)threadCount);
@@ -400,12 +402,15 @@ namespace ComicViewer
                     switch (status)
                     {
                         case JXL_DEC_BASIC_INFO:
+
+
                             if (JxlDecoderGetBasicInfo(dec, out info) != JXL_DEC_SUCCESS)
                                 throw new InvalidOperationException("JxlDecoderGetBasicInfo failed.");
                             hasInfo = true;
                             width = info.xsize;
                             height = info.ysize;
                             hasAlpha = info.alpha_bits > 0;
+
                             break;
 
                         case JXL_DEC_NEED_IMAGE_OUT_BUFFER:
@@ -413,6 +418,7 @@ namespace ComicViewer
                                 throw new InvalidOperationException(
                                     "NEED_IMAGE_OUT_BUFFER received before BASIC_INFO.");
                             {
+
                                 uint ch = hasAlpha ? 4u : 3u;
                                 var fmt = MakePixelFormat(ch);
                                 nuint sz;
@@ -570,77 +576,77 @@ namespace ComicViewer
                 align = 0
             };
 
-        private static void SwapRedBlue(byte[] pixels, int bpp)
-        {
-            for (int i = 0; i < pixels.Length; i += bpp)
-                (pixels[i], pixels[i + 2]) = (pixels[i + 2], pixels[i]);
-        }
+        //    private static void SwapRedBlue(byte[] pixels, int bpp)
+        //    {
+        //        for (int i = 0; i < pixels.Length; i += bpp)
+        //            (pixels[i], pixels[i + 2]) = (pixels[i + 2], pixels[i]);
+        //    }
 
-        private static BitmapImage ConvertToBitmapImage(BitmapSource source)
-        {
-            using var ms = new MemoryStream();
-            var enc = new PngBitmapEncoder();
-            enc.Frames.Add(BitmapFrame.Create(source));
-            enc.Save(ms);
-            ms.Position = 0;
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.StreamSource = ms;
-            bmp.EndInit();
-            bmp.Freeze();
-            return bmp;
-        }
-    }
+        //    private static BitmapImage ConvertToBitmapImage(BitmapSource source)
+        //    {
+        //        using var ms = new MemoryStream();
+        //        var enc = new PngBitmapEncoder();
+        //        enc.Frames.Add(BitmapFrame.Create(source));
+        //        enc.Save(ms);
+        //        ms.Position = 0;
+        //        var bmp = new BitmapImage();
+        //        bmp.BeginInit();
+        //        bmp.CacheOption = BitmapCacheOption.OnLoad;
+        //        bmp.StreamSource = ms;
+        //        bmp.EndInit();
+        //        bmp.Freeze();
+        //        return bmp;
+        //    }
+        //}
 
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Optional reusable thread pool for batch decoding
-    // ═════════════════════════════════════════════════════════════════════════
+        // ═════════════════════════════════════════════════════════════════════════
+        // Optional reusable thread pool for batch decoding
+        // ═════════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Creates the JxlThreadParallelRunner thread pool once and reuses it
-    /// across many decode calls, avoiding per-image create/destroy overhead.
-    ///
-    /// <code>
-    ///   using var pool = new JxlThreadPool();
-    ///   foreach (var file in files)
-    ///       JxlDecoder.Decode(File.ReadAllBytes(file), pool.Options);
-    /// </code>
-    /// </summary>
-    public sealed class JxlThreadPool : IDisposable
-    {
-        [DllImport(MainWindow.libJxlThreads, CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr JxlThreadParallelRunnerCreate(
-            IntPtr memory_manager, nuint num_worker_threads);
+        /// <summary>
+        /// Creates the JxlThreadParallelRunner thread pool once and reuses it
+        /// across many decode calls, avoiding per-image create/destroy overhead.
+        ///
+        /// <code>
+        ///   using var pool = new JxlThreadPool();
+        ///   foreach (var file in files)
+        ///       JxlDecoder.Decode(File.ReadAllBytes(file), pool.Options);
+        /// </code>
+        /// </summary>
+        //public sealed class JxlThreadPool : IDisposable
+        //{
+        //    [DllImport(MainWindow.libJxlThreads, CallingConvention = CallingConvention.Cdecl)]
+        //    private static extern IntPtr JxlThreadParallelRunnerCreate(
+        //        IntPtr memory_manager, nuint num_worker_threads);
 
-        [DllImport(MainWindow.libJxlThreads, CallingConvention = CallingConvention.Cdecl)]
-        private static extern void JxlThreadParallelRunnerDestroy(IntPtr runner);
+        //    [DllImport(MainWindow.libJxlThreads, CallingConvention = CallingConvention.Cdecl)]
+        //    private static extern void JxlThreadParallelRunnerDestroy(IntPtr runner);
 
-        private readonly IntPtr _runner;
-        private bool _disposed;
+        //    private readonly IntPtr _runner;
+        //    private bool _disposed;
 
-        public int ThreadCount { get; }
-        public JxlDecodeOptions Options { get; }
+        //    public int ThreadCount { get; }
+        //    public JxlDecodeOptions Options { get; }
 
-        public JxlThreadPool(int threadCount = 0, bool skipOrientation = false)
-        {
-            ThreadCount = threadCount <= 0 ? Environment.ProcessorCount : threadCount;
-            _runner = JxlThreadParallelRunnerCreate(IntPtr.Zero, (nuint)ThreadCount);
-            if (_runner == IntPtr.Zero)
-                throw new InvalidOperationException(
-                    "JxlThreadParallelRunnerCreate returned null.");
-            Options = new JxlDecodeOptions
-            { Threads = ThreadCount, SkipOrientation = skipOrientation };
-        }
+        //    public JxlThreadPool(int threadCount = 0, bool skipOrientation = false)
+        //    {
+        //        ThreadCount = threadCount <= 0 ? Environment.ProcessorCount : threadCount;
+        //        _runner = JxlThreadParallelRunnerCreate(IntPtr.Zero, (nuint)ThreadCount);
+        //        if (_runner == IntPtr.Zero)
+        //            throw new InvalidOperationException(
+        //                "JxlThreadParallelRunnerCreate returned null.");
+        //        Options = new JxlDecodeOptions
+        //        { Threads = ThreadCount, SkipOrientation = skipOrientation };
+        //    }
 
-        public void Dispose()
-        {
-            if (!_disposed)
-            {
-                JxlThreadParallelRunnerDestroy(_runner);
-                _disposed = true;
-            }
-        }
+        //    public void Dispose()
+        //    {
+        //        if (!_disposed)
+        //        {
+        //            JxlThreadParallelRunnerDestroy(_runner);
+        //            _disposed = true;
+        //        }
+        //    }
     }
 }

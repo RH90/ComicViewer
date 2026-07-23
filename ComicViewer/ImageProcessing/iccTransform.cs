@@ -325,9 +325,10 @@ public static class IccSrgbTransform
 
         if (colorSpace != "RGB")
             throw new NotSupportedException(
-                $"Only RGB ICC profiles are supported by this minimal transform " +
-                $"(profile color space is '{colorSpace}'). CMYK/Gray profiles need a " +
-                $"different pipeline (CMYK in particular is virtually always LUT-based).");
+               $"Only RGB ICC profiles are supported by this minimal transform " +
+               $"(profile color space is '{colorSpace}'). CMYK/Gray profiles need a " +
+               $"different pipeline (CMYK in particular is virtually always LUT-based).");
+
 
         if (pcs != "XYZ")
             throw new NotSupportedException(
