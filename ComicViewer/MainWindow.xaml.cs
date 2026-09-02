@@ -13,6 +13,7 @@ using Microsoft.VisualBasic.FileIO;
 using Microsoft.Win32;
 using NetVips;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using PhotoSauce.MagicScaler;
 using SharpCompress.Archives;
 using SharpCompress.Readers;
@@ -63,6 +64,10 @@ namespace ComicViewer
         private string jsonPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\" + "comic.json";
         private System.Windows.Point _lastTitlePos;
         private static ConcurrentDictionary<int, ImageContainer> _cache = new ConcurrentDictionary<int, ImageContainer>();
+
+        private static ConcurrentDictionary<int, List<AnimFrame>> _cacheWebp = new ConcurrentDictionary<int, List<AnimFrame>>();
+        private static ConcurrentDictionary<int, List<BitmapFrame>> _cacheGif = new ConcurrentDictionary<int, List<BitmapFrame>>();
+
         private bool _isFitWidth = false;
         private ComicItem _currentComicItem = null;
         //private LibVLC _libVLC;
@@ -513,7 +518,7 @@ namespace ComicViewer
 
 
             _archive?.Dispose();
-            _cache.Clear();
+            ClearCache();
 
             int test = 0;
 
@@ -706,86 +711,39 @@ namespace ComicViewer
                     _cache.TryRemove(key, out _);
                 }
 
-                //if (_pages[_currentPage].Key.ToLower().Contains(".webm") ||
-                //    _pages[_currentPage].Key.ToLower().Contains(".mp4") ||
-                //    _pages[_currentPage].Key.ToLower().Contains(".mkv"))
-                //{
-                //    mainWindow.Background = System.Windows.Media.Brushes.Black;
-                //    videoViewGrid.Visibility = Visibility.Visible;
-                //    videoView.Visibility = Visibility.Visible;
-                //    ComicDisplay.Source = null;
+                keysToRemove = _cacheWebp.Keys.Where(k =>
+               {
+                   if (pageDiff >= 0)
+                   {
+                       return k < _currentPage - 1;
+                   }
+                   else
+                   {
+                       return k > _currentPage + 1;
+                   }
+               }).ToList();
+                foreach (var key in keysToRemove)
+                {
+                    _cacheWebp.TryRemove(key, out _);
+                }
 
-                //    if (!_isVideoLoaded)
-                //    {
-
-                //        VideoView_Inititlize();
-                //        Thread thread = new Thread(() =>
-                //        {
-                //            while (!_isVideoLoaded)
-                //            {
-                //                Thread.Sleep(100);
-                //            }
-                //            StartNewVideo();
-                //        });
-                //        thread.Start();
-
-
-                //    }
-                //    else
-                //    {
-                //        StartNewVideo();
-                //    }
-
-                //}
-                //else
-                //{
-                //mainWindow.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0xFF, 0x1e, 0x1e, 0x1e));
-                //videoViewGrid.Visibility = Visibility.Hidden;
-                //videoView.Visibility = Visibility.Hidden;
-                //if (_mediaPlayer != null)
-                //{
-                //    _mediaPlayer.Stop();
-                //}
-                //var stream = _pages[_currentPage].OpenEntryStream();
-                //MemoryStream ms = new MemoryStream();
-                //stream.CopyTo(ms);
-                //ms.Position = 0;
+                keysToRemove = _cacheGif.Keys.Where(k =>
+                {
+                    if (pageDiff >= 0)
+                    {
+                        return k < _currentPage - 1;
+                    }
+                    else
+                    {
+                        return k > _currentPage + 1;
+                    }
+                }).ToList();
+                foreach (var key in keysToRemove)
+                {
+                    _cacheGif.TryRemove(key, out _);
+                }
 
                 BitmapSource imageToShow = null;
-                //RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.NearestNeighbor);
-                //RenderOptions.SetBitmapScalingMode(ComicDisplay, BitmapScalingMode.HighQuality);
-
-
-                bool isAnimated = false;
-                //if (_pages[_currentPage].Key.ToLower().Contains(".webp"))
-                //{
-
-                //}
-                //else if (_pages[_currentPage].Key.ToLower().Contains(".gif"))
-                //{
-
-                //}
-
-                //if (_pages[_currentPage].Key.ToLower().Contains(".gif") && isAnimated)
-                //{
-                //    //using var stream = _pages[_currentPage].OpenEntryStream();
-                //    //using MemoryStream ms = new MemoryStream();
-                //    //stream.CopyTo(ms);
-
-                //    ms.Position = 0;
-                //    StartGifAnimation(ms);
-
-                //}
-                //else if (_pages[_currentPage].Key.ToLower().Contains(".webp") && isAnimated)
-                //{
-                //    //using var stream = _pages[_currentPage].OpenEntryStream();
-                //    //using MemoryStream ms = new MemoryStream();
-                //    //stream.CopyTo(ms);
-
-                //    ms.Position = 0;
-                //    StartWebpAnimation(ms);
-                //}
-                //else
 
 
                 if (_cache.TryGetValue(_currentPage, out ImageContainer cachedImage))
@@ -813,15 +771,6 @@ namespace ComicViewer
                         _WebtoonStartPage = -1;
                         WindowFit(_currentComicItem.FitToWindow, false, imageToShow.Width, imageToShow.Height);
                         ComicDisplay.Source = imageToShow;
-                        //ComicDisplay.Source.Freeze();
-                        if (_currentPage + 1 <= _pages.Count - 1 && pageDiff > 0)
-                        {
-                            LoadAndProcessImage(_currentPage + 1, false);
-                        }
-                        if (_currentPage - 1 >= 0 && pageDiff < 0)
-                        {
-                            LoadAndProcessImage(_currentPage - 1, false);
-                        }
                     }
                     else
                     {
@@ -840,6 +789,15 @@ namespace ComicViewer
                     img.EndInit();
                     img.Freeze();
                     ComicDisplay.Source = img;
+                }
+
+                if (_currentPage + 1 <= _pages.Count - 1 && pageDiff > 0)
+                {
+                    LoadAndProcessImage(_currentPage + 1, false);
+                }
+                if (_currentPage - 1 >= 0 && pageDiff < 0)
+                {
+                    LoadAndProcessImage(_currentPage - 1, false);
                 }
 
 
@@ -887,6 +845,8 @@ namespace ComicViewer
                 _isPageLoading = false;
             }
         }
+
+
         private void UpdateDragScroll()
         {
             JsonComic jsonComic = LoadJson();
@@ -966,6 +926,7 @@ namespace ComicViewer
                     if (item.Name.ToLower().Contains("animation") && item.Description.ToLower().Contains("true"))
                     {
                         isAnimated = true;
+                        break;
                     }
                 }
             return isAnimated;
@@ -1155,19 +1116,46 @@ namespace ComicViewer
 
             return (bitmap);
         }
-        public void StartGifAnimation(MemoryStream ms)
+        public void StartGifAnimation(MemoryStream ms, int index)
         {
             //using var stream = _pages[_currentPage].OpenEntryStream();
             //using MemoryStream ms = new MemoryStream();
             //stream.CopyTo(ms);
             ms.Position = 0;
             //ms.Position = 0;
-            var decoder = new GifBitmapDecoder(
-                ms,
-                BitmapCreateOptions.PreservePixelFormat,
-                BitmapCacheOption.OnLoad);
 
-            var frames = decoder.Frames.ToList();
+
+            if (index != _currentPage)
+            {
+                var decoder1 = new GifBitmapDecoder(
+                   ms,
+                   BitmapCreateOptions.PreservePixelFormat,
+                   BitmapCacheOption.OnLoad);
+
+                var frames1 = decoder1.Frames.ToList();
+                _cacheGif.TryAdd(index, frames1);
+                return;
+            }
+
+
+            List<BitmapFrame> frames;
+            if (_cacheGif.TryGetValue(index, out frames))
+            {
+            }
+            else
+            {
+                var decoder = new GifBitmapDecoder(
+                  ms,
+                  BitmapCreateOptions.PreservePixelFormat,
+                  BitmapCacheOption.OnLoad);
+
+                frames = decoder.Frames.ToList();
+
+            }
+
+
+
+
             int frameIndex = 0;
             BitmapFrame image = frames[0];
             List<(int, int)> framesList = new List<(int, int)>();
@@ -1217,6 +1205,10 @@ namespace ComicViewer
                         image.Freeze();
                         this.Dispatcher.Invoke(new Action(() =>
                         {
+                            if (gifImg == null)
+                            {
+                                return;
+                            }
                             ComicDisplay.Source = image;
                             try
                             {
@@ -1253,7 +1245,7 @@ namespace ComicViewer
 
         }
 
-        public void StartWebpAnimation(MemoryStream ms)
+        public void StartWebpAnimation(MemoryStream ms, int index)
         {
 
             ms.Position = 0;
@@ -1261,8 +1253,18 @@ namespace ComicViewer
 
             webpBytes = ms.ToArray();
 
+            ms.Close();
+
+            //Log.add(_currentPage + ": " + index, false);
+
 
             var decoder = new AnimDecoder(webpBytes, true);
+            if (index != _currentPage)
+            {
+                //Log.add("Add webp frames", false);
+                _cacheWebp.TryAdd(index, decoder.DecodeAllFrames());
+                return;
+            }
 
 
             AnimFrame frame = decoder.GetNextFrame();
@@ -1274,6 +1276,7 @@ namespace ComicViewer
             if (gifThread != null && gifThread.IsAlive)
             {
                 gifThread.Interrupt();
+                gifThread = null;
             }
 
             gifThread = new Thread(() =>
@@ -1283,9 +1286,26 @@ namespace ComicViewer
 
 
                     int frameCount = decoder.Info.FrameCount;
-                    List<AnimFrame> frames = decoder.DecodeAllFrames();
+
+                    List<AnimFrame> frames;
+                    if (_cacheWebp.TryGetValue(index, out frames))
+                    {
+                        Log.add("cacheWebp count: " + _cacheWebp.Count, false);
+                    }
+                    else
+                    {
+                        frames = decoder.DecodeAllFrames();
+                    }
+
+                    //List<AnimFrame> frames = decoder.DecodeAllFrames();
                     while (true)
                     {
+                        if (!_isFocused)
+                        {
+                            Thread.Sleep(100);
+                            continue;
+                        }
+
                         int frameIndex = 0;
 
                         //while (decoder.HasMoreFrames())
@@ -1293,6 +1313,7 @@ namespace ComicViewer
                         //    AnimFrame frame = decoder.GetNextFrame();
                         foreach (var frame in frames)
                         {
+
                             BitmapSource image = BitmapSource.Create(frame.Width, frame.Height, 96, 96,
                                             System.Windows.Media.PixelFormats.Bgra32, null, frame.Pixels, 4 * frame.Width);
                             image.Freeze();
@@ -1407,7 +1428,7 @@ namespace ComicViewer
                         ((int)MainScroll.ViewportWidth != currentImage.ResizedImage.PixelWidth && _isFitWidth && !_fixedScale)
                         )
                     {
-                        _cache.Clear();
+                        ClearCache();
                         //WindowFit(_isFitWidth, true, 0, 0);
                         DisplayPage(0, 22);
                         Log.add("err", false);
@@ -1429,6 +1450,14 @@ namespace ComicViewer
                 SetTitleText("");
             }
         }
+
+        private static void ClearCache()
+        {
+            _cache.Clear();
+            _cacheWebp.Clear();
+            _cacheGif.Clear();
+        }
+
         private async Task<BitmapSource> LoadAndProcessImage(int index, bool isCurrentPage)
         {
 
@@ -1501,17 +1530,17 @@ namespace ComicViewer
                         if (_pages[index].Key.ToLower().Contains(".webp"))
                         {
                             isAni = isAnimatedWebp(ms);
-                            if (isAni && isCurrentPage)
+                            if (isAni)
                             {
-                                StartWebpAnimation(ms);
+                                StartWebpAnimation(ms, index);
                             }
                         }
                         else if (_pages[index].Key.ToLower().Contains(".gif"))
                         {
                             isAni = isAnimatedGif(ms);
-                            if (isAni && isCurrentPage)
+                            if (isAni)
                             {
-                                StartGifAnimation(ms);
+                                StartGifAnimation(ms, index);
                             }
                         }
 
@@ -1525,7 +1554,8 @@ namespace ComicViewer
                         }
                         else
                         {
-                            _cache.Clear();
+                            //_cache.Clear();
+                            //_cacheWebp.Clear();
                         }
 
                     }
@@ -1564,6 +1594,7 @@ namespace ComicViewer
 
                     System.GC.Collect();
                 }));
+                System.GC.Collect();
                 semImg.Release();
                 //Log.add(imageToShow.Width + "", false);
 
@@ -1988,7 +2019,7 @@ namespace ComicViewer
             if (forceUpdate || _isFitWidth != checkFit)
             {
                 //SaveJson(LoadJson(), 1);
-                _cache.Clear();
+                ClearCache();
                 //Log.add(String.Format("WindowFit"), false);
                 DisplayPage(0, 55);
                 //Log.add(String.Format("FitWindow: " + _isFitWidth + ""), false);
@@ -2556,7 +2587,7 @@ namespace ComicViewer
 
                                       if (_sizeChangeCnt == 0 && _currentComicItem != null)
                                       {
-                                          _cache.Clear();
+                                          ClearCache();
                                           DisplayPage(0, 6);
                                       }
 
@@ -2604,7 +2635,7 @@ namespace ComicViewer
                                 if (_sliderChangeCnt == 0 && semImg.CurrentCount > 0 && _currentComicItem != null)
                                 {
                                     _currentPage = (int)Slider.Value;
-                                    _cache.Clear();
+                                    ClearCache();
                                     DisplayPage(0, 6);
                                 }
                             }), DispatcherPriority.Send);
@@ -2771,7 +2802,7 @@ namespace ComicViewer
 
             ((MenuItem)sender).IsChecked = true;
 
-            _cache.Clear();
+            ClearCache();
             DisplayPage(0, 44);
         }
 
@@ -2789,7 +2820,7 @@ namespace ComicViewer
             _webtoonMargin = 0;
             ComicDisplay.Width = ComicDisplay.Source.Width;
             mainWindow.ResizeMode = ResizeMode.NoResize;
-            _cache.Clear();
+            ClearCache();
             //DisplayPage(0, 66);
 
         }
@@ -2807,7 +2838,7 @@ namespace ComicViewer
             _webtoonMargin = 10;
             ComicDisplay.Width = ComicDisplay.Source.Width;
             mainWindow.ResizeMode = ResizeMode.NoResize;
-            _cache.Clear();
+            ClearCache();
         }
 
         private void MenuWebtoonRestore_Click(object sender, RoutedEventArgs e)
