@@ -52,6 +52,7 @@ namespace ComicViewer
         private static SemaphoreSlim semQ = new SemaphoreSlim(3, 3);
         private String _currentFile = "";
         private String _currentFilePath = "";
+        private double forceScroll = 0;
         private double scrollWait = 0;
         private bool titleBarLocked = false;
         private long lastScrollStart = DateTime.Now.Ticks;
@@ -68,6 +69,7 @@ namespace ComicViewer
         private static ConcurrentDictionary<int, List<AnimFrame>> _cacheWebp = new ConcurrentDictionary<int, List<AnimFrame>>();
         private static ConcurrentDictionary<int, List<BitmapFrame>> _cacheGif = new ConcurrentDictionary<int, List<BitmapFrame>>();
 
+        public static bool checkIccProfile = true;
         private bool _isFitWidth = false;
         private ComicItem _currentComicItem = null;
         //private LibVLC _libVLC;
@@ -93,8 +95,8 @@ namespace ComicViewer
         private int _sliderChangeCnt = 0;
         private bool _isMouseOverSlider = false;
         private bool _MagicScale = false;
-        private bool _noScale = false;
-        private bool _fixedScale = false;
+        //private bool _noScale = false;
+        //private bool _fixedScale = false;
         private List<(int, System.Windows.Controls.Image)> webToonList = new List<(int, System.Windows.Controls.Image)>();
         public static Log Log = new Log();
         private double _fixedImageWidth = 0.8;
@@ -109,7 +111,18 @@ namespace ComicViewer
         private bool _isUpPressed = false;
         private bool _isDownPressed = false;
 
+
+
         DispatcherTimer dispatcherTimer = new DispatcherTimer();
+
+
+        public enum Fit
+        {
+            Fixed,
+            Width,
+            Window,
+            None
+        }
 
         public enum Scalers
         {
@@ -195,7 +208,7 @@ namespace ComicViewer
             _fixedImageRatio = jsonComic.FixedImageRatio > 0 ? jsonComic.FixedImageRatio : _fixedImageRatio;
 
 
-
+            ComicDisplay.LayoutUpdated += ComicDisplay_LayoutUpdated;
             scrollUpdateInterval = jsonComic.ScrollUpdateInterval >= 0 ? jsonComic.ScrollUpdateInterval : scrollUpdateInterval;
             //Debug.WriteLine(jsonComic.List.Count);
             sql = new SQL(jsonComic.DbPath);
@@ -217,10 +230,10 @@ namespace ComicViewer
                     argLower.Contains(".7z"))
                 {
 
-                    if ((i + 1) < args.Length && args[i + 1].ToLower().Contains("fixed"))
-                    {
-                        _fixedScale = true;
-                    }
+                    //if ((i + 1) < args.Length && args[i + 1].ToLower().Contains("fixed"))
+                    //{
+                    //    _fixedScale = true;
+                    //}
                     System.Diagnostics.Debug.WriteLine("Open zip: " + args[i]);
                     LoadArchive(args[i]);
                     break;
@@ -640,10 +653,10 @@ namespace ComicViewer
             Slider.Maximum = _pages.Count - 1;
 
             _currentPage = Math.Min(_currentComicItem.Pos, _pages.Count - 1);
-            _isFitWidth = !_currentComicItem.FitToWindow;
+            _isFitWidth = _currentComicItem.Fit == Fit.Width;
 
-            if (_pages.Any()) {; DisplayPage(1, 0); }
-            WindowFit(_currentComicItem.FitToWindow, false, 0, 0);
+            if (_pages.Any()) {; DisplayPage(1, 10, 0); }
+            WindowFit(false, 0, 0);
 
             //SQL sql = new SQL(jsonComic.DbPath);
             //for (int i = 0; i < jsonComic.List.Count; i++)
@@ -668,9 +681,9 @@ namespace ComicViewer
             return false;
         }
 
-        private async void DisplayPage(int pageDiff, int method)
+        private async void DisplayPage(int pageDiff, int method, double scroll)
         {
-            System.Diagnostics.Debug.WriteLine("DisplayPage: " + method);
+            Log.add("DisplayPage: " + method, false);
             gifImg = null;
             if (gifThread != null && gifThread.IsAlive)
             {
@@ -769,8 +782,15 @@ namespace ComicViewer
                     if (!_IsWebtoon)
                     {
                         _WebtoonStartPage = -1;
-                        WindowFit(_currentComicItem.FitToWindow, false, imageToShow.Width, imageToShow.Height);
+                        WindowFit(false, imageToShow.Width, imageToShow.Height);
+
+                        if (scroll > 0)
+                        {
+                            forceScroll = scroll;
+                        }
                         ComicDisplay.Source = imageToShow;
+                        //Log.add(imageToShow.Width + " w", false);
+
                     }
                     else
                     {
@@ -843,6 +863,15 @@ namespace ComicViewer
             finally
             {
                 _isPageLoading = false;
+            }
+        }
+
+        private void ComicDisplay_LayoutUpdated(object sender, EventArgs e)
+        {
+            if (forceScroll != 0)
+            {
+                MainScroll.ScrollToVerticalOffset(forceScroll);
+                forceScroll = 0;
             }
         }
 
@@ -1424,13 +1453,13 @@ namespace ComicViewer
                 string cachedStr = "";
 
                 if (gifImg == null)
-                    if (((int)MainScroll.ViewportWidth != currentImage.ResizedImage.PixelWidth && !_isFitWidth && !_fixedScale && (int)MainScroll.ViewportHeight > currentImage.ResizedImage.PixelHeight) ||
-                        ((int)MainScroll.ViewportWidth != currentImage.ResizedImage.PixelWidth && _isFitWidth && !_fixedScale)
+                    if (((int)MainScroll.ViewportWidth != currentImage.ResizedImage.PixelWidth && !_isFitWidth && !(_currentComicItem.Fit == Fit.Fixed) && (int)MainScroll.ViewportHeight > currentImage.ResizedImage.PixelHeight) ||
+                        ((int)MainScroll.ViewportWidth != currentImage.ResizedImage.PixelWidth && _isFitWidth && !(_currentComicItem.Fit == Fit.Fixed))
                         )
                     {
                         ClearCache();
                         //WindowFit(_isFitWidth, true, 0, 0);
-                        DisplayPage(0, 22);
+                        DisplayPage(0, 11, 0);
                         Log.add("err", false);
                     }
 
@@ -1649,7 +1678,7 @@ namespace ComicViewer
 
             Scalers scalingAlgo = _scalingAlgo;
 
-            if (_fixedScale)
+            if ((_currentComicItem.Fit == Fit.Fixed))
             {
                 newWidth = (int)Math.Min(SystemParameters.PrimaryScreenWidth * _fixedImageWidth, viewWidth);
                 if (ratioImg > _fixedImageRatio)
@@ -1662,7 +1691,7 @@ namespace ComicViewer
 
                 newHeight = (int)Math.Round(((double)OHeight) / newRatioWidth);
             }
-            else if (_noScale && OWidth < SystemParameters.PrimaryScreenWidth)
+            else if ((_currentComicItem.Fit == Fit.None) && OWidth < SystemParameters.PrimaryScreenWidth)
             {
                 newWidth = OWidth;
                 newHeight = OHeight;
@@ -1779,9 +1808,6 @@ namespace ComicViewer
                         OHeight = OHeight * aiScale;
                     }
 
-
-
-
                     using (var img = GetVipsImg(index, ms.ToArray()))
                     {
                         bs = VipsImageFactory.Scale(img, scalingAlgo, aiScale, newWidth, newHeight, sharpenLevel);
@@ -1883,11 +1909,8 @@ namespace ComicViewer
             {
                 return;
             }
-
-            _noScale = false;
-            _fixedScale = false;
-            _currentComicItem.FitToWindow = true;
-            WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
+            _currentComicItem.Fit = Fit.Window;
+            WindowFit(true, 0, 0);
         }
 
         private void SetFitWidth(object sender, RoutedEventArgs e)
@@ -1896,10 +1919,8 @@ namespace ComicViewer
             {
                 return;
             }
-            _noScale = false;
-            _fixedScale = false;
-            _currentComicItem.FitToWindow = false;
-            WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
+            _currentComicItem.Fit = Fit.Width;
+            WindowFit(true, 0, 0);
         }
         private void SetNoScale(object sender, RoutedEventArgs e)
         {
@@ -1907,9 +1928,8 @@ namespace ComicViewer
             {
                 return;
             }
-            _noScale = true;
-            _fixedScale = false;
-            WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
+            _currentComicItem.Fit = Fit.None;
+            WindowFit(true, 0, 0);
         }
         private void SetFixedScale(object sender, RoutedEventArgs e)
         {
@@ -1917,33 +1937,32 @@ namespace ComicViewer
             {
                 return;
             }
-            _fixedScale = true;
-            _noScale = false;
-            WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
+            _currentComicItem.Fit = Fit.Fixed;
+            WindowFit(true, 0, 0);
         }
 
-        private void WindowFit(bool fitToWindow, bool forceUpdate, double width, double height)
+        private void WindowFit(bool forceUpdate, double width, double height)
         {
             if (_IsWebtoon)
             {
                 return;
             }
 
-            if (_fixedScale)
+            if ((_currentComicItem.Fit == Fit.Fixed))
             {
                 MenuFitFixed.IsChecked = true;
                 MenuFitWidth.IsChecked = false;
                 MenuFitWindow.IsChecked = false;
                 MenuNoScale.IsChecked = false;
             }
-            else if (_noScale)
+            else if ((_currentComicItem.Fit == Fit.None))
             {
                 MenuFitFixed.IsChecked = false;
                 MenuFitWidth.IsChecked = false;
                 MenuFitWindow.IsChecked = false;
                 MenuNoScale.IsChecked = true;
             }
-            else if (fitToWindow)
+            else if (_currentComicItem.Fit == Fit.Window)
             {
                 MenuFitFixed.IsChecked = false;
                 MenuNoScale.IsChecked = false;
@@ -1968,38 +1987,25 @@ namespace ComicViewer
             double ratioView = (double)MainContainer.ActualWidth / (double)MainContainer.ActualHeight;
 
             bool checkFit = _isFitWidth;
-            //ComicDisplay.ClearValue(FrameworkElement.HeightProperty);
-            //ComicStack.ClearValue(FrameworkElement.HeightProperty);
-            //ComicStack.ClearValue(FrameworkElement.WidthProperty);
-            //ComicDisplay.MaxHeight = ComicDisplay.Source.Height;
-            //Log.add(String.Format(ratioImage + ", " + ratioView), false);
-            //Log.add(String.Format(ComicDisplay.Width + ", " + MainScroll.ActualWidth + ", " + ComicStack.ActualWidth), false);
-            //  Width="{Binding Path=ActualWidth, ElementName=ComicDisplay}"
-            //Log.add(String.Format($"FitWindow: {fitToWindow}, ratioImage: {Math.Round(ratioImage, 4)}, ratioView: {Math.Round(ratioView, 4)}, page: {_currentPage}"), false);
-            if (_noScale || _fixedScale)
+
+            if ((_currentComicItem.Fit == Fit.Window) || ratioImage >= ratioView && ComicDisplay.Source != null)
+            {
+                _isFitWidth = false;
+                // 1. Remove the explicit width/height constraints so it can shrink
+                ComicDisplay.MaxHeight = MainScroll.ViewportHeight;
+                // 2. Set stretch to fit the whole image inside the box
+                ComicDisplay.Stretch = System.Windows.Media.Stretch.Uniform;
+                // 3. Kill the scrollbars entirely
+                MainScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                MainScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            }
+            else if ((_currentComicItem.Fit == Fit.None) || (_currentComicItem.Fit == Fit.Fixed))
             {
                 ComicDisplay.Stretch = System.Windows.Media.Stretch.None;
                 MainScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
                 MainScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
             }
-            else if (fitToWindow || ratioImage >= ratioView && ComicDisplay.Source != null)
-            {
-                _isFitWidth = false;
-                //ScrollThresholdLimit = ScrollFast;
-                // 1. Remove the explicit width/height constraints so it can shrink
 
-
-                ComicDisplay.MaxHeight = MainScroll.ViewportHeight;
-                //ComicStack.Height =
-                //ComicStack.MaxHeight = MainScroll.ViewportHeight;
-                // 2. Set stretch to fit the whole image inside the box
-                ComicDisplay.Stretch = System.Windows.Media.Stretch.Uniform;
-                //ComicDisplay.Height = MainScroll.ViewportHeight;
-
-                // 3. Kill the scrollbars entirely
-                MainScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
-                MainScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-            }
             else
             {
                 _isFitWidth = true;
@@ -2007,13 +2013,9 @@ namespace ComicViewer
                 // 1. Re-enable vertical scrolling
                 MainScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
                 MainScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-
                 // 2. Force the image width to match the window width
                 // We use a binding or direct assignment
                 ComicDisplay.Stretch = System.Windows.Media.Stretch.Uniform;
-                //ComicDisplay.Width = MainScroll.Width;
-
-
             }
 
             if (forceUpdate || _isFitWidth != checkFit)
@@ -2021,10 +2023,10 @@ namespace ComicViewer
                 //SaveJson(LoadJson(), 1);
                 ClearCache();
                 //Log.add(String.Format("WindowFit"), false);
-                DisplayPage(0, 55);
+
+                DisplayPage(0, 12, MainScroll.VerticalOffset);
                 //Log.add(String.Format("FitWindow: " + _isFitWidth + ""), false);
             }
-
         }
 
         private void SaveJson(JsonComic jsonComic, int method)
@@ -2085,9 +2087,6 @@ namespace ComicViewer
 
             sw.Stop();
             Log.add(String.Format("Save Json: {0}, page: {1}, timeSave: {2}, method: {3}", _currentComicItem.Name, _currentPage, sw.ElapsedMilliseconds, method), false);
-            //}, DispatcherPriority.Send);
-
-
         }
 
         // --- NAVIGATION & SCROLLING ---
@@ -2154,7 +2153,7 @@ namespace ComicViewer
                             if (_currentPage < _pages.Count - 1)
                             {
                                 _currentPage++;
-                                DisplayPage(1, 1);
+                                DisplayPage(1, 13, 0);
                                 lastScrollStart = DateTime.Now.Ticks;
                             }
                             //}
@@ -2172,7 +2171,7 @@ namespace ComicViewer
                             if (_currentPage > 0)
                             {
                                 _currentPage--;
-                                DisplayPage(-1, 6);
+                                DisplayPage(-1, 14, 0);
                             }
                             //e.Handled = true;
                         }
@@ -2202,7 +2201,7 @@ namespace ComicViewer
                 {
                     //e.Handled = true;
                     _currentPage++;
-                    DisplayPage(0, 577);
+                    DisplayPage(0, 15, 0);
                     UpdateInfo(null);
                 }
             }
@@ -2288,7 +2287,7 @@ namespace ComicViewer
             {
                 return;
             }
-            WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
+            //WindowFit(true, 0, 0);
         }
         int skip = 10;
         double _lastoffset = -1;
@@ -2303,8 +2302,8 @@ namespace ComicViewer
             }
         }
 
-        private void Prev_Click(object sender, RoutedEventArgs e) { if (_currentPage > 0) { _currentPage--; DisplayPage(-1, 2); } }
-        private void Next_Click(object sender, RoutedEventArgs e) { if (_currentPage < _pages.Count - 1) { _currentPage++; DisplayPage(1, 3); } }
+        private void Prev_Click(object sender, RoutedEventArgs e) { if (_currentPage > 0) { _currentPage--; DisplayPage(-1, 16, 0); } }
+        private void Next_Click(object sender, RoutedEventArgs e) { if (_currentPage < _pages.Count - 1) { _currentPage++; DisplayPage(1, 17, 0); } }
 
         private void StackPanel_MouseEnter(object sender, MouseEventArgs e)
         {
@@ -2323,11 +2322,11 @@ namespace ComicViewer
             _isDownPressed = false;
             if (e.Key.Equals(Key.Left))
             {
-                if (_currentPage > 0) { _currentPage--; DisplayPage(-1, 2); }
+                if (_currentPage > 0) { _currentPage--; DisplayPage(-1, 18, 0); }
             }
             else if (e.Key.Equals(Key.Right))
             {
-                if (_currentPage < _pages.Count - 1) { _currentPage++; DisplayPage(1, 3); }
+                if (_currentPage < _pages.Count - 1) { _currentPage++; DisplayPage(1, 19, 0); }
             }
             else if (e.Key.Equals(Key.F11))
             {
@@ -2397,7 +2396,7 @@ namespace ComicViewer
                 {
                     e.Handled = true;
                     _currentPage++;
-                    DisplayPage(0, 577);
+                    DisplayPage(0, 20, 0);
                     UpdateInfo(null);
                 }
             }
@@ -2584,19 +2583,18 @@ namespace ComicViewer
                               {
                                   this.Dispatcher.Invoke(new Action(() =>
                                   {
-
                                       if (_sizeChangeCnt == 0 && _currentComicItem != null)
                                       {
-                                          ClearCache();
-                                          DisplayPage(0, 6);
-                                      }
 
+                                          //ClearCache();
+                                          //DisplayPage(0, 62);
+                                          WindowFit(true, 0, 0);
+                                          //Log.add(scroll + "", false);
+
+                                      }
                                   }), DispatcherPriority.Send);
                               }
-
-
                           }
-
                       }
                       catch (ThreadInterruptedException ex)
                       {
@@ -2604,7 +2602,6 @@ namespace ComicViewer
                           Log.add(ex.StackTrace, true);
                       }
                   }
-
               }));
             thSizeChanged.Start();
         }
@@ -2636,7 +2633,7 @@ namespace ComicViewer
                                 {
                                     _currentPage = (int)Slider.Value;
                                     ClearCache();
-                                    DisplayPage(0, 6);
+                                    DisplayPage(0, 21, 0);
                                 }
                             }), DispatcherPriority.Send);
                         }
@@ -2803,7 +2800,7 @@ namespace ComicViewer
             ((MenuItem)sender).IsChecked = true;
 
             ClearCache();
-            DisplayPage(0, 44);
+            DisplayPage(0, 22, 0);
         }
 
 
@@ -2813,8 +2810,8 @@ namespace ComicViewer
             {
                 return;
             }
-            _currentComicItem.FitToWindow = false;
-            WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
+            _currentComicItem.Fit = Fit.Width;
+            WindowFit(true, 0, 0);
 
             _IsWebtoon = true;
             _webtoonMargin = 0;
@@ -2831,8 +2828,8 @@ namespace ComicViewer
             {
                 return;
             }
-            _currentComicItem.FitToWindow = false;
-            WindowFit(_currentComicItem.FitToWindow, true, 0, 0);
+            _currentComicItem.Fit = Fit.Width;
+            WindowFit(true, 0, 0);
 
             _IsWebtoon = true;
             _webtoonMargin = 10;
@@ -2863,7 +2860,7 @@ namespace ComicViewer
             ComicDisplay.Margin = new Thickness(0);
             _currentPage = Math.Max(_currentPage - 3, 0);
 
-            DisplayPage(0, 5532);
+            DisplayPage(0, 23, 0);
             mainWindow.ResizeMode = ResizeMode.CanResize;
         }
 
@@ -2963,10 +2960,10 @@ namespace ComicViewer
         {
             string cmdstr = "\"" + path + "\"";
 
-            if (_fixedScale)
-            {
-                cmdstr += " fixed";
-            }
+            //if (_currentComicItem.Fit == Fit.Fixed)
+            //{
+            //    cmdstr += " fixed";
+            //}
 
             ProcessStartInfo ProcessInfo = new ProcessStartInfo("\"" + System.Environment.ProcessPath + "\"", cmdstr);
             ProcessInfo.CreateNoWindow = true;
@@ -2982,6 +2979,18 @@ namespace ComicViewer
         private void mainWindow_Deactivated(object sender, EventArgs e)
         {
             _isFocused = false;
+        }
+
+        private void ICC_Click(object sender, RoutedEventArgs e)
+        {
+            checkIccProfile = !checkIccProfile;
+
+            ((MenuItem)sender).IsChecked = checkIccProfile;
+            ClearCache();
+            //Log.add(String.Format("WindowFit"), false);
+
+            DisplayPage(0, 16, MainScroll.VerticalOffset);
+
         }
     }
 

@@ -20,7 +20,7 @@ namespace ComicViewer
                 query.CommandText = "CREATE TABLE IF NOT EXISTS comics(" +
                     "name TEXT PRIMARY KEY UNIQUE NOT NULL, " +
                     "pos INTEGER DEFAULT 0, " +
-                    "FitToWindow INTEGER DEFAULT 0, " +
+                    "Fit INTEGER DEFAULT 0, " +
                     "LastOpened INTEGER DEFAULT 0," +
                     "Parent TEXT NOT NULL" +
                     ")";
@@ -51,7 +51,7 @@ namespace ComicViewer
             {
                 comicItem.Name = reader.GetString(reader.GetOrdinal("name"));
                 comicItem.Pos = reader.GetInt32(reader.GetOrdinal("pos"));
-                comicItem.FitToWindow = reader.GetInt32(reader.GetOrdinal("FitToWindow")) == 1;
+                comicItem.Fit = (MainWindow.Fit)reader.GetInt32(reader.GetOrdinal("Fit"));
                 comicItem.LastOpened = reader.GetInt64(reader.GetOrdinal("LastOpened"));
                 comicItem.Parent = reader.GetString(reader.GetOrdinal("Parent"));
                 return comicItem;
@@ -66,12 +66,12 @@ namespace ComicViewer
         public void add(ComicItem comicItem)
         {
 
-            string sql = "INSERT OR REPLACE INTO comics(name,pos,FitToWindow,LastOpened,Parent) VALUES(@name,@pos,@FitToWindow,@LastOpened,@Parent)" +
-                " ON CONFLICT(name) DO UPDATE SET pos=excluded.pos, FitToWindow=excluded.FitToWindow, LastOpened=excluded.LastOpened, Parent=excluded.Parent;";
+            string sql = "INSERT OR REPLACE INTO comics(name,pos,Fit,LastOpened,Parent) VALUES(@name,@pos,@Fit,@LastOpened,@Parent)" +
+                " ON CONFLICT(name) DO UPDATE SET pos=excluded.pos, Fit=excluded.Fit, LastOpened=excluded.LastOpened, Parent=excluded.Parent;";
             SQLiteCommand query = new SQLiteCommand(sql, conMain);
             query.Parameters.AddWithValue("name", comicItem.Name);
             query.Parameters.AddWithValue("pos", comicItem.Pos);
-            query.Parameters.AddWithValue("FitToWindow", comicItem.FitToWindow ? 1 : 0);
+            query.Parameters.AddWithValue("Fit", comicItem.Fit);
             query.Parameters.AddWithValue("LastOpened", comicItem.LastOpened);
             query.Parameters.AddWithValue("Parent", comicItem.Parent);
             query.ExecuteNonQuery();
@@ -90,7 +90,7 @@ namespace ComicViewer
                 ComicItem comicItem = new ComicItem();
                 comicItem.Name = reader.GetString(reader.GetOrdinal("name"));
                 comicItem.Pos = reader.GetInt32(reader.GetOrdinal("pos"));
-                comicItem.FitToWindow = reader.GetInt32(reader.GetOrdinal("FitToWindow")) == 1;
+                comicItem.Fit = (MainWindow.Fit)reader.GetInt32(reader.GetOrdinal("Fit"));
                 comicItem.LastOpened = reader.GetInt64(reader.GetOrdinal("LastOpened"));
                 comicItem.Parent = reader.GetString(reader.GetOrdinal("Parent"));
                 recentList.Add(comicItem);

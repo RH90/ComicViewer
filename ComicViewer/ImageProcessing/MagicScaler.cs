@@ -497,6 +497,7 @@ public static class MagicScalerImageFactory
             //ColorProfileMode = ColorProfileMode.Normalize,
         };
 
+
         if (interpolation == InterpolationSettings.CatmullRom)
         {
             //settings.Interpolation = InterpolationSettings.Lanczos;
@@ -520,6 +521,10 @@ public static class MagicScalerImageFactory
             settings.ColorProfileMode = ColorProfileMode.Normalize;
         }
 
+        if (!MainWindow.checkIccProfile)
+        {
+            settings.ColorProfileMode = ColorProfileMode.Ignore;
+        }
 
         if (targetWidth > 0) settings.Width = targetWidth;
         if (targetHeight > 0) settings.Height = targetHeight;

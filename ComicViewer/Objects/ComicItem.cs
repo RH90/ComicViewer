@@ -9,12 +9,12 @@ namespace ComicViewer.Objects
         private string name = "";
         private string parent = "";
         private int pos = 0;
-        private bool fitToWindow = false;
+        private MainWindow.Fit fit = MainWindow.Fit.Fixed;
         private long lastOpened = DateTime.Now.Ticks;
 
         public string Name { get => name; set => name = value; }
         public int Pos { get => pos; set => pos = value; }
-        public bool FitToWindow { get => fitToWindow; set => fitToWindow = value; }
+        public MainWindow.Fit Fit { get => fit; set => fit = value; }
         public long LastOpened { get => lastOpened; set => lastOpened = value; }
         public string Parent { get => parent; set => parent = value; }
     }

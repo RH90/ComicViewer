@@ -548,10 +548,17 @@ public static class VipsImageFactory
     {
         try
         {
+
             // Check if the image has an embedded ICC profile.
             // get_typeof returns 0 if the field does not exist.
             //MainWindow.Log.add("ICC profile type: " + img.GetTypeOf("icc-profile-data"), false);
-            if (img.GetTypeOf("icc-profile-data") == 0)
+            //string[] fields = img.GetFields();
+            //foreach (var item in fields)
+            //{
+            //    MainWindow.Log.add(item, false);
+            //}
+
+            if (img.GetTypeOf("icc-profile-data") == 0 || !MainWindow.checkIccProfile)
             {
                 Debug.WriteLine("No embedded ICC profile found; skipping colour transform.");
                 return img;
@@ -562,6 +569,7 @@ public static class VipsImageFactory
             // "srgb" = standard sRGB, which is what BitmapSource/WPF expects.
             // PCS = perceptual rendering intent — best for display/photos.
             // embedded = true means use the profile attached to the image.
+            //return img;
             return img.IccTransform(
                 "srgb",
                 pcs: Enums.PCS.Xyz,
